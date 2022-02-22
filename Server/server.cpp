@@ -35,8 +35,9 @@ int main() {
     int fd_num = master_socket;
     while (true){
         read_set = client_set;
+        cout << "Sleep on select" <<endl;
         not_used = select(fd_num + 1,&read_set, nullptr, nullptr, nullptr);
-        ISLESSTHANZERO(not_used,"select failedS")
+        ISLESSTHANZERO(not_used,"select failed")
         //find the ready socket
         for(int fd = 3; fd <= fd_num;fd ++){
             if(FD_ISSET(fd,&read_set)){
@@ -44,8 +45,9 @@ int main() {
                     fd_c = accept(fd, nullptr,nullptr);
                     FD_SET(fd_c,&client_set);
                     if(fd_c > fd_num ) fd_num = fd_c;
+                    cout << "Accepted connection " << endl;
                 } else{
-                    n_byte_read = read(fd_c,buff,MAX_CHARS);
+                    n_byte_read = read(fd,buff,MAX_CHARS);
                     if(n_byte_read == 0){ //client done
                         FD_CLR(fd,&client_set);
                         fd_num = update_max(client_set,fd_num);
