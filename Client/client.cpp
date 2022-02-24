@@ -3,23 +3,25 @@
 #include <arpa/inet.h>
 #include  <unistd.h>
 #include <iostream>
-#include "../Utility/utility.h"
+#include "../Common/utility.h"
+#include "../Managers/managers.h"
 
 using namespace std;
+using namespace Managers;
 //
 // Created by crl on 2/19/22.
 //
 int main(){
     int server_socket;
     int not_used;
-    struct sockaddr_in server_addr;
+    struct sockaddr_in server_address;
     //TODO: parsing parameters
 
-    memset((void*)&server_addr,0,(size_t) sizeof(server_addr));
+    memset((void*)&server_address,0,(size_t) sizeof(server_address));
 
-    server_addr.sin_family= AF_INET; //kind of socket
-    server_addr.sin_port = htons(SERVER_PORT); //server port
-    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");  //server IP
+    server_address.sin_family= AF_INET; //kind of socket
+    server_address.sin_port = htons(SERVER_PORT); //server port
+    server_address.sin_addr.s_addr = inet_addr("127.0.0.1");  //server IP
 
     server_socket = socket(AF_INET,SOCK_STREAM,0);
 
@@ -27,14 +29,14 @@ int main(){
 
     cout << "Socket opened" << endl;
 
-    not_used = connect(server_socket,(struct sockaddr*) &server_addr,sizeof(server_addr));
+    not_used = connect(server_socket,(struct sockaddr*) &server_address,sizeof(server_address));
     ISLESSTHANZERO(not_used,"Connect failed")
     string str = "hi server how are you?";
     size_t size = str.length();
-    size_t tmp = write(server_socket,str.c_str(),size);
-    cout << "written " << tmp << endl;
+    int tmp = SocketManager::write_n(server_socket,size,(void*) str.c_str());
+    cout << "written with result " << tmp << endl;
     char* reply = new char [MAX_CHARS + 1];
-    tmp = read(server_socket,reply, MAX_CHARS);
+    tmp = SocketManager::read_n(server_socket,32,(void*) reply);
     cout << "Got " << reply << " " << tmp << " bytes" << endl;
     free(reply);
     close(server_socket);

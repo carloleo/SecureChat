@@ -1,15 +1,16 @@
 #include <iostream>
-#include "../Utility/utility.h"
+#include "../Common/utility.h"
 #include <netinet/in.h>
 #include  <unistd.h>
 #include <cstring>
+#include "../Managers/managers.h"
 using namespace std;
+using namespace Managers;
 int update_max(fd_set set,int fd_max);
 int main() {
     int master_socket;
-    //int client_sockets[MAX_CONN];
     //client's socket
-    int fd_c = -1;
+    int fd_c;
     size_t n_byte_read;
     int not_used;
     fd_set client_set;
@@ -59,8 +60,8 @@ int main() {
                         cout <<"read: " <<  buff << endl;
                         string reply = "I'm doing so well!! se you later";
                         size_t size = reply.length();
-                        size_t tmp = write(fd,reply.c_str(),size);
-                        cout << "Replied " << tmp << endl;
+                        not_used = SocketManager::write_n(fd,size,(void*) reply.c_str());
+                        cout << "Replied with result " << not_used << endl;
                     }
                 }
 
