@@ -18,5 +18,5 @@
                 perror(message) ; \
                 exit(ERROR);        \
             }
-
+enum OP{AUTH_REQUEST,AUTH_RESPONSE,AUTH_KEY_SETUP,REQUEST_TO_TALK, REQUEST_OK, REQUEST_KO,DATA};
 #endif //SECURECHAT_UTILITY_H
