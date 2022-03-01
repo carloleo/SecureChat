@@ -10,10 +10,10 @@
 using namespace std;
 class Session {
 private:
-    map<string,User> users;
+    map<string,User*> users;
 public:
-    User get_user(string username);
-    void add_user(string username,User user);
+    User* get_user(string username);
+    void add_user(string username,User *user);
     void change_status(string username, bool is_online);
     //TODO: build the users online list
 };

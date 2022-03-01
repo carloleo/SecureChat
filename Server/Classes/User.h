@@ -10,16 +10,16 @@ using namespace std;
 class User {
 private:
     string user_name;
-    char* session_key;
+    unsigned char* session_key;
     bool is_online;
 public:
-    void setSessionKey(char *sessionKey);
+    void setSessionKey(unsigned char *sessionKey);
     void setUserName(const string &userName);
     void setIsOnline(bool isOnline);
 
 public:
     const string &getUserName() const;
-    char *getSessionKey() const;
+    unsigned char *getSessionKey() const;
     bool isOnline() const;
 };
 
