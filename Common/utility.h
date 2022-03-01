@@ -5,6 +5,7 @@
 #ifndef SECURECHAT_UTILITY_H
 #define SECURE_CHAT_UTILITY_H
 #include <cerrno>
+#include <string>
 #define  ERROR 1
 #define  SERVER_PORT 8888
 #define  MAX_CHARS (size_t) 10000
