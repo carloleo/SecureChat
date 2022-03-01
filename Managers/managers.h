@@ -4,6 +4,9 @@
 
 #ifndef SECURECHAT_MANAGERS_H
 #define SECURECHAT_MANAGERS_H
+#include <string>
+
+using namespace std;
 #include <cstddef>
 namespace Managers {
     namespace SocketManager {
@@ -26,7 +29,7 @@ namespace Managers {
                         unsigned char *plaintext);
         int sign(unsigned char*plaintext, unsigned char* sign_key);
         int verify_signature(unsigned  char*signature, unsigned char* pub_key);
-        void manage_error(std::string message);
+        void manage_error(string message);
     }
 }
 

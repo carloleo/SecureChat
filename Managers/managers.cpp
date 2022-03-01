@@ -4,10 +4,10 @@
 
 #include "managers.h"
 #include <csignal>
-#include <cerrno
+#include <cerrno>
 #include <openssl/evp.h>
 #include <iostream>
-#include "../Common/utility.h"
+#include <string>
 
 #define CIPHER  EVP_aes_128_gcm()
 #define TAG_LEN 16
@@ -55,7 +55,6 @@ int Managers::CryptoManager::gcm_encrypt(unsigned char *plaintext, int plaintext
         CryptoManager::manage_error("allocation cipher context failed");
         return 0;
     }
-    ISNOT(ctx,"initializing cipher context failed")
     not_used = EVP_EncryptInit(ctx,CIPHER,key,iv);
     if(not_used != 1){
         CryptoManager::manage_error("initializing cipher failed");
@@ -140,13 +139,10 @@ int Managers::CryptoManager::gcm_decrypt(unsigned char *ciphertext, int cipherte
         CryptoManager::manage_error("setting expected tag value failed");
         return 0;
     }
-    /*
-     * Finalise the decryption. A positive return value indicates success,
-     * anything else is a failure - the plaintext is not trustworthy.
-     */
+    // finalize encryption and compare authentication tags
     not_used = EVP_DecryptFinal(ctx, plaintext, &len);
 
-    /* Clean up */
+    // cleaning up
     EVP_CIPHER_CTX_cleanup(ctx);
 
     if(not_used > 0) {
@@ -158,7 +154,7 @@ int Managers::CryptoManager::gcm_decrypt(unsigned char *ciphertext, int cipherte
         return -1;
     }
 }
-//TOD0: fix type
-void Managers::CryptoManager::manage_error(std::string message){
+//REMINDER: IV as AAD
+void Managers::CryptoManager::manage_error(string message){
     std::cerr << message << std::endl;
 }
