@@ -5,6 +5,7 @@
 #ifndef SECURECHAT_MANAGERS_H
 #define SECURECHAT_MANAGERS_H
 #include <string>
+#include <openssl/evp.h>
 
 using namespace std;
 #include <cstddef>
@@ -27,8 +28,8 @@ namespace Managers {
                         unsigned char *key,
                         unsigned char *iv, int iv_len,
                         unsigned char *plaintext);
-        int sign(unsigned char*plaintext, unsigned char* sign_key);
-        int verify_signature(unsigned  char*signature, unsigned char* pub_key);
+        unsigned char* sign(unsigned char*plaintext, uint64_t plain_size , EVP_PKEY* sign_key,uint32_t* sgnt_size);
+        bool verify_signature(unsigned  char*signature, EVP_PKEY* pub_key);
         void manage_error(string message);
     }
 }

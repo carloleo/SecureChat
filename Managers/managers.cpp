@@ -3,6 +3,7 @@
 //
 
 #include "managers.h"
+#include "../Common/utility.h"
 #include <csignal>
 #include <cerrno>
 #include <openssl/evp.h>
@@ -10,6 +11,7 @@
 #include <string>
 
 #define CIPHER  EVP_aes_128_gcm()
+#define DIGEST EVP_sha256()
 #define TAG_LEN 16
 
 using namespace std;
@@ -157,4 +159,39 @@ int Managers::CryptoManager::gcm_decrypt(unsigned char *ciphertext, int cipherte
 //REMINDER: IV as AAD
 void Managers::CryptoManager::manage_error(string message){
     std::cerr << message << std::endl;
+}
+//return
+unsigned char* Managers::CryptoManager::sign(unsigned char *plaintext, uint64_t plain_size, EVP_PKEY *sign_key, uint32_t* sgnt_size) {
+    int not_used;
+    unsigned char * sgnt_buff; //signature
+    //creating signature context
+    EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
+    if(!md_ctx){
+        CryptoManager::manage_error("allocating signature context failed");
+        return nullptr;
+    }
+    not_used = EVP_SignInit(md_ctx,DIGEST);
+    if(not_used != 1){
+        CryptoManager::manage_error("initializing signature context failed");
+        return nullptr;
+    }
+    not_used = EVP_SignUpdate(md_ctx, plaintext, plain_size);
+    if(not_used == 0){
+        CryptoManager::manage_error("computing signature failed");
+        return nullptr;
+    }
+    sgnt_buff = new unsigned char [EVP_PKEY_size(sign_key)];
+    ISNOT(sgnt_buff,"allocating signature buffer failed")
+    not_used = EVP_SignFinal(md_ctx, sgnt_buff, sgnt_size, sign_key);
+    if(not_used == 0){
+        CryptoManager::manage_error("finalizing signature failed");
+        return nullptr;
+    }
+
+    // delete the digest and the private key from memory:
+    EVP_MD_CTX_free(md_ctx);
+    //EVP_PKEY_free(prvkey);
+    return  sgnt_buff;
+
+
 }
