@@ -12,45 +12,32 @@ using namespace std;
 class Message {
 private:
     //header
-    OP op;
+    MESSAGE_TYPE type;
     uint32_t  nonce;
-    uint32_t sequence_number;
-    string user;
+    string sender;
+    string recipient;
     //payload
     string payload;
 public:
-    void set_op(OP op);
-    void set_nonce(uint32_t nonce);
-    void set_sequence_number(uint32_t sequence_number);
-    void set_user(string user);
-    void set_payload(string payload);
-
-    void setOp(OP op);
-
-    void setNonce(uint32_t nonce);
-
-    void setSequenceNumber(uint32_t sequenceNumber);
-
-    void setUser(const string &user);
-
-    void setPayload(const string &payload);
-
-    OP get_op();
-
-    OP getOp() const;
+    MESSAGE_TYPE getType() const;
 
     uint32_t getNonce() const;
 
-    uint32_t getSequenceNumber() const;
+    const string &getSender() const;
 
-    const string &getUser() const;
+    const string &getRecipient() const;
 
     const string &getPayload() const;
 
-    uint32_t get_nonce();
-    uint32_t get_sequence_number();
-    string get_user();
-    string get_payload();
+    void setType(MESSAGE_TYPE type);
+
+    void setNonce(uint32_t nonce);
+
+    void setSender(const string &sender);
+
+    void setRecipient(const string &recipient);
+
+    void setPayload(const string &payload);
 };
 
 
