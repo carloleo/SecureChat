@@ -8,8 +8,10 @@ User* Session::get_user(string username) {
     return users.at(username);
 }
 
-void Session::add_user(string username, User* user) {
-    users[username] = user;
+void Session::add_user(string username) {
+    User* usr = new User();
+    usr->setUserName(username);
+    users[username] = usr;
 }
 
 void Session::change_status(string username, bool is_online) {

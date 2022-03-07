@@ -3,10 +3,16 @@
 #include <netinet/in.h>
 #include  <unistd.h>
 #include <cstring>
+#include <fstream>
+#include <vector>
+#include "Classes/Session.h"
 #include "../Managers/managers.h"
+#define USERS_FILE "../Certs/users.txt"
 using namespace std;
 using namespace Managers;
 int update_max(fd_set set,int fd_max);
+Session* configure_users(void);
+vector<string> parse_line(string line);
 int main() {
     int master_socket;
     //client's socket
@@ -18,7 +24,7 @@ int main() {
     //socket address
     struct sockaddr_in address;
     char buff [MAX_CHARS + 1];
-
+    Session* session = configure_users();
     master_socket = socket(AF_INET,SOCK_STREAM,0);
     ISLESSTHANZERO(master_socket,"Opening master socket failed");
     cout << "Master socket opened" << endl;
@@ -77,4 +83,36 @@ int update_max(fd_set set,int fd_max){
         if(FD_ISSET(i,&set)) return i;
     }
     return -1;
+}
+
+Session* configure_users(void){
+    Session* session = new Session();
+    vector<string> usernames;
+    string line;
+    fstream users_file(USERS_FILE);
+    while(users_file && users_file.is_open() && getline(users_file,line)){
+        usernames = parse_line(line);
+        for(auto username : usernames) {
+           // cout << username << endl;
+            session->add_user(username);
+        }
+
+    }
+    users_file.close();
+    return session;
+}
+
+vector<string> parse_line(string line){
+    vector<string> tokens;
+    string splitting = ",";
+    size_t index;
+    while((index = line.find(splitting)) != string::npos){
+        tokens.push_back(line.substr(0,index));
+        //remove last token and splitting char
+        line.erase(0,index + splitting.length());
+    }
+    //last element
+    if(line.length() > 0)
+        tokens.push_back(line);
+    return tokens;
 }
