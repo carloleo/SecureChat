@@ -12,9 +12,9 @@ class Session {
 private:
     map<string,User*> users;
 public:
-    User* get_user(string username);
-    void add_user(string username,User *user);
-    void change_status(string username, bool is_online);
+    User* get_user(std::string username);
+    void add_user(std::string username,User *user);
+    void change_status(std::string username, bool is_online);
     //TODO: build the users online list
 };
 

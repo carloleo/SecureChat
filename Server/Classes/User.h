@@ -4,21 +4,21 @@
 
 #ifndef SECURECHAT_USER_H
 #define SECURECHAT_USER_H
-using namespace std;
+
 #include <string>
 
 class User {
 private:
-    string user_name;
+    std::string user_name;
     unsigned char* session_key;
     bool is_online;
 public:
     void setSessionKey(unsigned char *sessionKey);
-    void setUserName(const string &userName);
+    void setUserName(const std::string &userName);
     void setIsOnline(bool isOnline);
 
 public:
-    const string &getUserName() const;
+    const std::string &getUserName() const;
     unsigned char *getSessionKey() const;
     bool isOnline() const;
 };

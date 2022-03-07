@@ -4,7 +4,7 @@
 
 #include "User.h"
 
-const string &User::getUserName() const {
+const std::string &User::getUserName() const {
     return user_name;
 }
 
@@ -12,7 +12,7 @@ unsigned char *User::getSessionKey() const {
     return session_key;
 }
 
-void User::setUserName(const string &userName) {
+void User::setUserName(const std::string &userName) {
     user_name = userName;
 }
 

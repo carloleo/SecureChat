@@ -6,8 +6,6 @@
 #define SECURECHAT_MANAGERS_H
 #include <string>
 #include <openssl/evp.h>
-
-using namespace std;
 #include <cstddef>
 namespace Managers {
     namespace SocketManager {
@@ -30,7 +28,7 @@ namespace Managers {
                         unsigned char *plaintext);
         unsigned char* sign(unsigned char*plaintext, uint64_t plain_size , EVP_PKEY* sign_key,uint32_t* sgnt_size);
         bool verify_signature(unsigned  char*signature, EVP_PKEY* pub_key);
-        void manage_error(string message);
+        void manage_error(std::string message);
     }
 }
 
