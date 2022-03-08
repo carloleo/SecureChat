@@ -15,6 +15,11 @@
 #define CIPHER  EVP_aes_128_gcm()
 #define DIGEST EVP_sha256()
 #define TAG_LEN 16
+#define OPENSSL_FAIL(result,message,error_value) \
+       if(!result){               \
+            CryptoManager::manage_error(message);                         \
+            return error_value;                                  \
+       }
 
 using namespace std;
 int Managers::SocketManager::write_n(int socket, size_t amount, void *buff) {
@@ -54,49 +59,32 @@ int Managers::CryptoManager::gcm_encrypt(unsigned char *plaintext, int plaintext
     int not_used;
     int len=0;
     int ciphertext_len = 0;
+    //create context
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if(!ctx){
-        CryptoManager::manage_error("allocation cipher context failed");
-        return 0;
-    }
+    OPENSSL_FAIL(ctx,"allocation cipher context failed",0)
+    //init context
     not_used = EVP_EncryptInit(ctx,CIPHER,key,iv);
-    if(not_used != 1){
-        CryptoManager::manage_error("initializing cipher failed");
-        return 0;
-    }
-
+    OPENSSL_FAIL(not_used,"initializing cipher failed",0)
     //Provide any AAD data. This can be called zero or more times as required
     not_used = EVP_EncryptUpdate(ctx, nullptr, &len, aad, aad_len);
-    if(not_used != 1 ) {
-        CryptoManager::manage_error("adding aad failed");
-        return 0;
-    }
+    OPENSSL_FAIL(not_used,"adding aad failed",0);
     //encrypt plaintext
     not_used = EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len);
-    if(not_used != 1){
-        CryptoManager::manage_error("Encryption failed");
-        return 0;
-    }
+    OPENSSL_FAIL(not_used,"encryption failed",0)
     //increase the ciphertext length
     ciphertext_len += len;
     //move ahead pointer
     ciphertext += len;
-
+    //finalize encryption
     not_used = EVP_EncryptFinal(ctx, ciphertext , &len);
-    if(not_used != 1) {
-        manage_error("Finalizing encryption fail");
-        return 0;
-    }
+    OPENSSL_FAIL(not_used,"finalizing encryption fail",0)
     //increase the ciphertext length
     ciphertext_len += len;
 
     //getting the tag
     not_used = EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, TAG_LEN, tag);
-    if(not_used!= 1){
-        CryptoManager::manage_error("getting authentication tag failed");
-        return 0;
-    }
-    /* Clean up */
+    OPENSSL_FAIL(not_used,"getting authentication tag failed",0)
+    //clean up
     EVP_CIPHER_CTX_free(ctx);
     return ciphertext_len;
 }
@@ -111,39 +99,25 @@ int Managers::CryptoManager::gcm_decrypt(unsigned char *ciphertext, int cipherte
     int ret;
     /* Create and initialise the context */
     ctx = EVP_CIPHER_CTX_new();
-    if(!ctx) {
-        CryptoManager::manage_error("allocation cipher context failed");
-        return 0;
-    }
+    OPENSSL_FAIL(ctx,"allocation cipher context failed",0)
     not_used = EVP_DecryptInit(ctx, EVP_aes_128_gcm(), key, iv);
-    if(not_used != 1) {
-        CryptoManager::manage_error("initializing cipher failed");
-        return 0;
-    }
+    OPENSSL_FAIL(not_used,"initializing cipher failed",0)
     //Provide any AAD data.
     not_used = EVP_DecryptUpdate(ctx, nullptr, &len, aad, aad_len);
-    if(not_used != 1) {
-        CryptoManager::manage_error("setting aad failed");
-        return 0;
-    }
+    OPENSSL_FAIL(not_used,"adding aad failed",0);
     //Provide the message to be decrypted, and obtain the plaintext output.
     not_used = EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len);
-    if(not_used != 1) {
-        CryptoManager::manage_error("decryption failed");
-        return 0;
-    }
+    OPENSSL_FAIL(not_used,"decryption failed",0)
     //update plaintext length
     plaintext_len = len;
     //move ahead the pointer
     plaintext += len;
 
-    /* Set expected tag value. Works in OpenSSL 1.0.1d and later */
+    //Set expected tag value. Works in OpenSSL 1.0.1d and later
     not_used = EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, TAG_LEN, tag);
-    if(not_used != 1) {
-        CryptoManager::manage_error("setting expected tag value failed");
-        return 0;
-    }
-    // finalize encryption and compare authentication tags
+    OPENSSL_FAIL(not_used,"setting expected tag value failed",0)
+
+    // finalize decryption and compare authentication tags
     not_used = EVP_DecryptFinal(ctx, plaintext, &len);
 
     // cleaning up
@@ -155,7 +129,7 @@ int Managers::CryptoManager::gcm_decrypt(unsigned char *ciphertext, int cipherte
         return plaintext_len;
     } else {
         /* Verify failed */
-        return -1;
+        return 0;
     }
 }
 //REMINDER: IV as AAD
@@ -169,27 +143,18 @@ unsigned char* Managers::CryptoManager::sign(unsigned char *plaintext, uint64_t 
     unsigned char * sgnt_buff; //signature
     //creating signature context
     EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
-    if(!md_ctx){
-        CryptoManager::manage_error("allocating signature context failed");
-        return nullptr;
-    }
+    OPENSSL_FAIL(md_ctx,"allocating signature context failed", nullptr)
+
     not_used = EVP_SignInit(md_ctx,DIGEST);
-    if(not_used != 1){
-        CryptoManager::manage_error("initializing signature context failed");
-        return nullptr;
-    }
+    OPENSSL_FAIL(not_used,"initializing signature context failed", nullptr)
     not_used = EVP_SignUpdate(md_ctx, plaintext, plain_size);
-    if(not_used == 0){
-        CryptoManager::manage_error("computing signature failed");
-        return nullptr;
-    }
+    OPENSSL_FAIL(not_used,"computing signature failed", nullptr)
     sgnt_buff = new unsigned char [EVP_PKEY_size(sign_key)];
     ISNOT(sgnt_buff,"allocating signature buffer failed")
+    //finalize signature
     not_used = EVP_SignFinal(md_ctx, sgnt_buff, sgnt_size, sign_key);
-    if(not_used == 0){
-        CryptoManager::manage_error("finalizing signature failed");
-        return nullptr;
-    }
+    OPENSSL_FAIL(not_used,"finalizing signature failed", nullptr)
+
 
     // delete the digest and the private key from memory:
     EVP_MD_CTX_free(md_ctx);
@@ -202,20 +167,11 @@ int Managers::CryptoManager::verify_signature(unsigned  char*signature, uint32_t
     int not_used;
     int result;
     EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
-    if(!md_ctx){
-        CryptoManager::manage_error("allocating signature context failed");
-        return 0;
-    }
+    OPENSSL_FAIL(md_ctx,"allocating signature context failed", 0)
     not_used = EVP_VerifyInit(md_ctx,DIGEST);
-    if(not_used != 1){
-        CryptoManager::manage_error("initializing signature verify context failed");
-        return 0;
-    }
+    OPENSSL_FAIL(not_used,"initializing signature context failed", 0)
     not_used =  EVP_VerifyUpdate(md_ctx, plain_text, plain_size);
-    if(not_used != 1){
-        CryptoManager::manage_error("very update failed");
-        return 0;
-    }
+    OPENSSL_FAIL(not_used,"very update failed", 0)
     result = EVP_VerifyFinal(md_ctx,signature,signature_size,pub_key);
     return result == 1 ? result : 0;
 }
@@ -224,30 +180,25 @@ X509* Managers::CryptoManager::open_certificate(string path){
     FILE* file;
     file = fopen(path.c_str(),"r");
     if(!file) {
-        Managers::CryptoManager::manage_error("Opening " + path + " failed");
+        cerr << "error opening " << path << endl;
         return nullptr;
     }
     X509* cert;
     cert = PEM_read_X509(file,NULL,NULL,NULL);
-    if(!cert){
-        Managers::CryptoManager::manage_error("Reading cert " + path + " failed");
-        return nullptr;
-    }
+    OPENSSL_FAIL(cert,"Reading cert " + path + " failed", nullptr)
+    fclose(file);
     return cert;
 }
 X509_CRL* Managers::CryptoManager::open_crl(string path){
     FILE* file;
     file = fopen(path.c_str(),"r");
     if(!file) {
-        Managers::CryptoManager::manage_error("Opening " + path + " failed");
+        cerr << "error opening " << path << endl;
         return nullptr;
     }
     X509_CRL* crl;
     crl = PEM_read_X509_CRL(file,NULL,NULL,NULL);
-    if(!crl){
-        Managers::CryptoManager::manage_error("Reading CRL " + path + " failed");
-        return nullptr;
-    }
+    OPENSSL_FAIL(crl,"Reading CRL " + path + " failed", nullptr)
+    fclose(file);
     return crl;
-
 }
