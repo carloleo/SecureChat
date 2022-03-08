@@ -7,6 +7,8 @@
 #include <csignal>
 #include <cerrno>
 #include <openssl/evp.h>
+#include <openssl/err.h>
+#include <openssl/pem.h>
 #include <iostream>
 #include <string>
 
@@ -159,6 +161,7 @@ int Managers::CryptoManager::gcm_decrypt(unsigned char *ciphertext, int cipherte
 //REMINDER: IV as AAD
 void Managers::CryptoManager::manage_error(string message){
     std::cerr << message << std::endl;
+    ERR_print_errors_fp(stderr);
 }
 //return
 unsigned char* Managers::CryptoManager::sign(unsigned char *plaintext, uint64_t plain_size, EVP_PKEY *sign_key, uint32_t* sgnt_size) {
@@ -215,4 +218,36 @@ int Managers::CryptoManager::verify_signature(unsigned  char*signature, uint32_t
     }
     result = EVP_VerifyFinal(md_ctx,signature,signature_size,pub_key);
     return result == 1 ? result : 0;
+}
+
+X509* Managers::CryptoManager::open_certificate(string path){
+    FILE* file;
+    file = fopen(path.c_str(),"r");
+    if(!file) {
+        Managers::CryptoManager::manage_error("Opening " + path + " failed");
+        return nullptr;
+    }
+    X509* cert;
+    cert = PEM_read_X509(file,NULL,NULL,NULL);
+    if(!cert){
+        Managers::CryptoManager::manage_error("Reading cert " + path + " failed");
+        return nullptr;
+    }
+    return cert;
+}
+X509_CRL* Managers::CryptoManager::open_crl(string path){
+    FILE* file;
+    file = fopen(path.c_str(),"r");
+    if(!file) {
+        Managers::CryptoManager::manage_error("Opening " + path + " failed");
+        return nullptr;
+    }
+    X509_CRL* crl;
+    crl = PEM_read_X509_CRL(file,NULL,NULL,NULL);
+    if(!crl){
+        Managers::CryptoManager::manage_error("Reading CRL " + path + " failed");
+        return nullptr;
+    }
+    return crl;
+
 }

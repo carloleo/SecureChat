@@ -29,6 +29,8 @@ namespace Managers {
         unsigned char* sign(unsigned char*plaintext, uint64_t plain_size , EVP_PKEY* sign_key,uint32_t* sgnt_size);
         int verify_signature(unsigned  char*signature, uint32_t  signature_size, unsigned  char* plain_text, uint64_t
                                 plain_size, EVP_PKEY* pub_key);
+        X509* open_certificate(string path);
+        X509_CRL* open_crl(string path);
         void manage_error(std::string message);
     }
 }
