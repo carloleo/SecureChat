@@ -25,6 +25,7 @@ int main() {
     struct sockaddr_in address;
     char buff [MAX_CHARS + 1];
     Session* session = configure_users();
+    delete session;
     master_socket = socket(AF_INET,SOCK_STREAM,0);
     ISLESSTHANZERO(master_socket,"Opening master socket failed");
     cout << "Master socket opened" << endl;

@@ -15,6 +15,7 @@ public:
     User* get_user(std::string username);
     void add_user(std::string username);
     void change_status(std::string username, bool is_online);
+    ~Session();
     //TODO: build the users online list
 };
 

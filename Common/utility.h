@@ -9,6 +9,7 @@
 #define  ERROR 1
 #define  SERVER_PORT 8888
 #define  MAX_CHARS (size_t) 10000
+#define KEY_LENGTH 16
 #define ISNOT(var,message) \
             if(!var){            \
                 perror(message) ; \

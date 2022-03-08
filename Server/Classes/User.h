@@ -16,6 +16,8 @@ public:
     void setSessionKey(unsigned char *sessionKey);
     void setUserName(const std::string &userName);
     void setIsOnline(bool isOnline);
+    void deleteSessionKey() const;
+    ~User();
 
 public:
     const std::string &getUserName() const;
