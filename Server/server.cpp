@@ -1,5 +1,4 @@
 #include <iostream>
-#include "../Common/utility.h"
 #include <netinet/in.h>
 #include  <unistd.h>
 #include <cstring>
@@ -55,6 +54,8 @@ int main() {
                     if(fd_c > fd_num ) fd_num = fd_c;
                     cout << "Accepted connection " << endl;
                 } else{
+                    //SocketManager::read_message(fd);
+                    //exit(0);
                     n_byte_read = read(fd,buff,MAX_CHARS);
                     if(n_byte_read <= 0){ //client done
                         FD_CLR(fd,&client_set);

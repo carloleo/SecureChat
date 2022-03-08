@@ -3,7 +3,6 @@
 //
 
 #include "managers.h"
-#include "../Common/utility.h"
 #include <csignal>
 #include <cerrno>
 #include <openssl/evp.h>
@@ -58,7 +57,72 @@ int Managers::SocketManager::read_n(int socket, size_t amount, void *buff) {
     }
     return 1;
 }
-
+int Managers::SocketManager::send_message(int socket, Message *msg) {
+    BIO* m_bio = BIO_new(BIO_s_mem());
+    int not_used;
+    uint32_t nonce;
+    int tmp;
+    OPENSSL_FAIL(m_bio,"allocating bio fail",0)
+    switch (msg->getType()) {
+        case AUTH_REQUEST:
+            tmp = msg->getType();
+            not_used = SocketManager::write_n(socket,sizeof(int),(void*)&tmp);
+            tmp = msg->getSender().length();
+            not_used = SocketManager::write_n(socket,sizeof(int), (void*) &tmp);
+            not_used = SocketManager::write_n(socket,msg->getSender().length(),
+                                              (void*) (msg->getSender().c_str()));
+            nonce = msg->getPayload()->getNonce();
+            cout << nonce << endl;
+            not_used = SocketManager::write_n(socket,sizeof(uint32_t),(void*)&nonce);
+            return not_used;
+            break;
+        case AUTH_RESPONSE:
+            break;
+        case AUTH_KEY_EXCHANGE:
+            break;
+        case AUTH_KEY_EXCHANGE_RESPONSE:
+            break;
+        default:
+            break;
+    }
+    BIO_free(m_bio);
+    return 1;
+}
+Message* Managers::SocketManager::read_message(int socket){
+    BIO* m_bio = BIO_new(BIO_s_mem());
+    int not_used;
+    int tmp;
+    uint32_t nonce;
+    char* username;
+    OPENSSL_FAIL(m_bio,"allocating bio fail",0)
+    int type = 0;
+    not_used = SocketManager::read_n(socket,sizeof(int),(void*)&type);
+    switch (type) {
+        case AUTH_REQUEST:
+            not_used = SocketManager::read_n(socket,sizeof(int), (void*) &tmp);
+            cout << tmp << endl;
+            //read username
+            username = new char[tmp+1];
+            not_used = SocketManager::read_n(socket,tmp,
+                                              (void*) username);
+            username[tmp + 1] = '\0';
+            cout << username << endl;
+            //read nonce
+            not_used = SocketManager::read_n(socket,sizeof(uint32_t),(void*)&nonce);
+            cout << nonce << endl;
+            break;
+        case AUTH_RESPONSE:
+            break;
+        case AUTH_KEY_EXCHANGE:
+            break;
+        case AUTH_KEY_EXCHANGE_RESPONSE:
+            break;
+        default:
+            break;
+    }
+    BIO_free(m_bio);
+    return NULL;
+}
 int Managers::CryptoManager::gcm_encrypt(unsigned char *plaintext, int plaintext_len,
                                          unsigned char *aad, int aad_len,
                                          unsigned char *key,

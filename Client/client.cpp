@@ -3,7 +3,6 @@
 #include <arpa/inet.h>
 #include  <unistd.h>
 #include <iostream>
-#include "../Common/utility.h"
 #include "../Managers/managers.h"
 #define CERT_DIR (string )"../Client/Certs/"
 #define CA_CERT (string) "CA.pem"
@@ -30,8 +29,17 @@ int main(){
     //connect to server
     not_used = connect(server_socket,(struct sockaddr*) &server_address,sizeof(server_address));
     ISLESSTHANZERO(not_used,"Connect failed")
-
-
+    /*
+    Message* message = new Message();
+    message->setPayload(new Payload());
+    message->setSender("Alice");
+    message->setType(AUTH_REQUEST);
+    unsigned char* bytes = new unsigned char[4];
+    CryptoManager::generate_random_bytes(bytes,4);
+    message->getPayload()->setNonce((uint32_t )(bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | (bytes[3]));
+    SocketManager::send_message(server_socket,message);
+    exit(0);
+     */
     string str = "hi server how are you?";
     size_t size = str.length();
     int tmp = SocketManager::write_n(server_socket,size,(void*) str.c_str());
