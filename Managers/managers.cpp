@@ -10,8 +10,10 @@
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/x509_vfy.h>
+#include <openssl/rand.h>
 #include <iostream>
 #include <string>
+#include <limits>
 
 #define CIPHER  EVP_aes_128_gcm()
 #define DIGEST EVP_sha256()
@@ -240,4 +242,21 @@ int Managers::CryptoManager::verify_cert(X509* ca_cert, X509_CRL* crl, X509* cer
     X509_STORE_CTX_free(ctx_store);
 
     return result == 1 ? result : 0;
+}
+
+int Managers::CryptoManager::generate_random_bytes(unsigned char* bytes,int amount) {
+    static uint32_t times = 0;
+    int not_used;
+    //reseed
+    if(times >= numeric_limits<uint32_t>::max() - 1 ) {
+        not_used = RAND_poll();
+        OPENSSL_FAIL(not_used,"polling error",0);
+    }
+    not_used = RAND_bytes(bytes,amount);
+    if(not_used == -1){
+        cerr << "RAND_bytes() is not supported" << endl;
+        return 0;
+    }
+    OPENSSL_FAIL(not_used,"generating rand bytes failed",0)
+    return 1;
 }
