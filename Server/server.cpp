@@ -7,7 +7,7 @@
 #include <vector>
 #include "Classes/Session.h"
 #include "../Managers/managers.h"
-#define USERS_FILE "../Certs/users.txt"
+#define USERS_FILE "../Server/Certs/users.txt"
 using namespace std;
 using namespace Managers;
 int update_max(fd_set set,int fd_max);
@@ -91,10 +91,12 @@ Session* configure_users(void){
     vector<string> usernames;
     string line;
     fstream users_file(USERS_FILE);
-    while(users_file && users_file.is_open() && getline(users_file,line)){
+    cout << USERS_FILE << endl;
+    cout << users_file.is_open() << endl;
+    while(users_file.is_open() && getline(users_file,line)){
         usernames = parse_line(line);
         for(auto username : usernames) {
-           // cout << username << endl;
+            //cout << username << endl;
             session->add_user(username);
         }
 

@@ -192,6 +192,27 @@ unsigned char* Managers::CryptoManager::sign(unsigned char *plaintext, uint64_t 
     EVP_MD_CTX_free(md_ctx);
     //EVP_PKEY_free(prvkey);
     return  sgnt_buff;
+}
 
-
+int Managers::CryptoManager::verify_signature(unsigned  char*signature, uint32_t  signature_size, unsigned  char* plain_text,
+                                              uint64_t  plain_size, EVP_PKEY* pub_key){
+    int not_used;
+    int result;
+    EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
+    if(!md_ctx){
+        CryptoManager::manage_error("allocating signature context failed");
+        return 0;
+    }
+    not_used = EVP_VerifyInit(md_ctx,DIGEST);
+    if(not_used != 1){
+        CryptoManager::manage_error("initializing signature verify context failed");
+        return 0;
+    }
+    not_used =  EVP_VerifyUpdate(md_ctx, plain_text, plain_size);
+    if(not_used != 1){
+        CryptoManager::manage_error("very update failed");
+        return 0;
+    }
+    result = EVP_VerifyFinal(md_ctx,signature,signature_size,pub_key);
+    return result == 1 ? result : 0;
 }
