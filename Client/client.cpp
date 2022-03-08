@@ -10,7 +10,7 @@
 #define CA_CRL "CA_crl.pem"
 using namespace std;
 using namespace Managers;
-int verify_server_cert(void);
+int verify_cert(X509*);
 //
 // Created by crl on 2/19/22.
 //
@@ -21,15 +21,11 @@ int main(){
     //TODO: parsing parameters
 
     memset((void*)&server_address,0,(size_t) sizeof(server_address));
-
     server_address.sin_family= AF_INET; //kind of socket
     server_address.sin_port = htons(SERVER_PORT); //server port
     server_address.sin_addr.s_addr = inet_addr("127.0.0.1");  //server IP
-
     server_socket = socket(AF_INET,SOCK_STREAM,0);
-
     ISLESSTHANZERO(server_socket,"Opening socket failed")
-
     cout << "Socket opened" << endl;
 
     not_used = connect(server_socket,(struct sockaddr*) &server_address,sizeof(server_address));
@@ -46,7 +42,7 @@ int main(){
     return  0;
 }
 
-int  verify_s_cert(X509* cert){
+int  verify_cert(X509* cert){
     X509* ca_cert = CryptoManager::open_certificate(CERT_DIR + CA_CERT);
     ISNOT(ca_cert,"opening CA certificate failed")
     X509_CRL* ca_crl = CryptoManager::open_crl(CERT_DIR + CA_CRL);

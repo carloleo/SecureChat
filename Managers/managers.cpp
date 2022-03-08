@@ -24,28 +24,35 @@
 
 using namespace std;
 int Managers::SocketManager::write_n(int socket, size_t amount, void *buff) {
-    size_t tot = 0;
+    size_t left = amount;
     size_t n;
-    while (tot < amount){
-        n = write(socket,buff,amount);
-        if(n == -1 && errno != EINTR)
+    char* buff_ptr = (char*) buff;
+    while (left > 0){
+        n = write(socket,buff_ptr,amount);
+        if(n == -1){
+            if (errno == EINTR ) continue;
+            else if( errno == EPIPE) return 0; //ignore
             return -1;
-        else if(errno == EINTR)
-            continue;
-        tot += n;
+        }
+        left -= n;
+        buff_ptr += n;
+
     }
     return 1;
 }
 int Managers::SocketManager::read_n(int socket, size_t amount, void *buff) {
-    size_t tot = 0;
+    size_t left = amount;
     size_t n;
-    while (tot < amount){
-        n = read(socket,buff,amount);
-        if(n == -1 && errno != EINTR)
+    char* buff_ptr = (char*) buff;
+    while (left > 0){
+        n = read(socket,buff_ptr,amount);
+        if(n == -1) {
+            if (errno == EINTR) continue;
+            else if (errno == ECONNRESET) return 0; //ignore
             return -1;
-        else if(errno == EINTR)
-            continue;
-        tot += n;
+        }
+        left -= n;
+        buff_ptr += n;
     }
     return 1;
 }

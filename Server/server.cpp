@@ -56,7 +56,7 @@ int main() {
                     cout << "Accepted connection " << endl;
                 } else{
                     n_byte_read = read(fd,buff,MAX_CHARS);
-                    if(n_byte_read == 0){ //client done
+                    if(n_byte_read <= 0){ //client done
                         FD_CLR(fd,&client_set);
                         fd_num = update_max(client_set,fd_num);
                         ISLESSTHANZERO(fd_num,"update_max failed")
