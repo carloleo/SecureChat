@@ -9,6 +9,7 @@
 #include <openssl/evp.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
+#include <openssl/x509_vfy.h>
 #include <iostream>
 #include <string>
 
@@ -173,6 +174,7 @@ int Managers::CryptoManager::verify_signature(unsigned  char*signature, uint32_t
     not_used =  EVP_VerifyUpdate(md_ctx, plain_text, plain_size);
     OPENSSL_FAIL(not_used,"very update failed", 0)
     result = EVP_VerifyFinal(md_ctx,signature,signature_size,pub_key);
+    EVP_MD_CTX_free(md_ctx);
     return result == 1 ? result : 0;
 }
 
@@ -201,4 +203,34 @@ X509_CRL* Managers::CryptoManager::open_crl(string path){
     OPENSSL_FAIL(crl,"Reading CRL " + path + " failed", nullptr)
     fclose(file);
     return crl;
+
+}
+int Managers::CryptoManager::verify_cert(X509* ca_cert, X509_CRL* crl, X509* cert) {
+    X509_STORE* store;
+    int not_used;
+    store = X509_STORE_new();
+    OPENSSL_FAIL(not_used,"allocating store failed",0)
+    //add CA's cert
+    not_used = X509_STORE_add_cert(store,ca_cert);
+    OPENSSL_FAIL(not_used,"adding certificate failed",0)
+    //add crl list
+    not_used = X509_STORE_add_crl(store,crl);
+    OPENSSL_FAIL(not_used,"adding crl failed",0);
+    //to use crl
+    not_used = X509_STORE_set_flags(store, X509_V_FLAG_CRL_CHECK);
+    OPENSSL_FAIL(not_used,"setting clr flag fail",0)
+
+    //certificate verification
+    X509_STORE_CTX* ctx_store = X509_STORE_CTX_new();
+    OPENSSL_FAIL(ctx_store,"allocating store context failed",0)
+    //init store context
+    not_used = X509_STORE_CTX_init(ctx_store,store,cert,NULL);
+    OPENSSL_FAIL(not_used,"initializing ctx_store failed",0)
+    //verify cert
+    int result = X509_verify_cert(ctx_store);
+    //clean up
+    X509_STORE_free(store);
+    X509_STORE_CTX_free(ctx_store);
+
+    return result == 1 ? result : 0;
 }

@@ -5,9 +5,12 @@
 #include <iostream>
 #include "../Common/utility.h"
 #include "../Managers/managers.h"
-
+#define CERT_DIR (string )"../Client/Certs/"
+#define CA_CERT (string) "CA.pem"
+#define CA_CRL "CA_crl.pem"
 using namespace std;
 using namespace Managers;
+int verify_server_cert(void);
 //
 // Created by crl on 2/19/22.
 //
@@ -41,4 +44,13 @@ int main(){
     free(reply);
     close(server_socket);
     return  0;
+}
+
+int  verify_s_cert(X509* cert){
+    X509* ca_cert = CryptoManager::open_certificate(CERT_DIR + CA_CERT);
+    ISNOT(ca_cert,"opening CA certificate failed")
+    X509_CRL* ca_crl = CryptoManager::open_crl(CERT_DIR + CA_CRL);
+    ISNOT(ca_crl,"opening CA_crl failed")
+    int result = CryptoManager::verify_cert(ca_cert,ca_crl,cert);
+    return result;
 }

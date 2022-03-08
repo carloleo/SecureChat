@@ -31,6 +31,7 @@ namespace Managers {
                                 plain_size, EVP_PKEY* pub_key);
         X509* open_certificate(string path);
         X509_CRL* open_crl(string path);
+        int verify_cert(X509* ca_cert, X509_CRL* crl, X509* cert) ;
         void manage_error(std::string message);
     }
 }
