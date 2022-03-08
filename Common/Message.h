@@ -5,6 +5,7 @@
 #ifndef SECURECHAT_MESSAGE_H
 #define SECURECHAT_MESSAGE_H
 #include "utility.h"
+#include "Payload.h"
 #include <string>
 
 
@@ -12,31 +13,32 @@ class Message {
 private:
     //header
     MESSAGE_TYPE type;
-    uint32_t  nonce;
+    uint32_t t_pk_len; //ephemeral public key length
+    uint32_t cert_len; // certificate length
+    uint32_t c_txt_len; //ciphertext length
+    uint32_t sequence_n; //sequence number
     std::string sender;
     std::string recipient;
     //payload
-    std::string payload;
+    Payload* payload;
 public:
     MESSAGE_TYPE getType() const;
-
-    uint32_t getNonce() const;
 
     const std::string &getSender() const;
 
     const std::string &getRecipient() const;
 
-    const std::string &getPayload() const;
+    Payload *getPayload() const;
 
     void setType(MESSAGE_TYPE type);
-
-    void setNonce(uint32_t nonce);
 
     void setSender(const std::string &sender);
 
     void setRecipient(const std::string &recipient);
 
-    void setPayload(const std::string &payload);
+    void setPayload(Payload *payload);
+
+    virtual ~Message();
 };
 
 

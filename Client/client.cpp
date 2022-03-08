@@ -19,7 +19,7 @@ int main(){
     int not_used;
     struct sockaddr_in server_address;
     //TODO: parsing parameters
-
+    //open socket
     memset((void*)&server_address,0,(size_t) sizeof(server_address));
     server_address.sin_family= AF_INET; //kind of socket
     server_address.sin_port = htons(SERVER_PORT); //server port
@@ -27,9 +27,11 @@ int main(){
     server_socket = socket(AF_INET,SOCK_STREAM,0);
     ISLESSTHANZERO(server_socket,"Opening socket failed")
     cout << "Socket opened" << endl;
-
+    //connect to server
     not_used = connect(server_socket,(struct sockaddr*) &server_address,sizeof(server_address));
     ISLESSTHANZERO(not_used,"Connect failed")
+
+
     string str = "hi server how are you?";
     size_t size = str.length();
     int tmp = SocketManager::write_n(server_socket,size,(void*) str.c_str());

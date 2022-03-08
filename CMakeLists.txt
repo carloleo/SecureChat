@@ -18,9 +18,9 @@ include_directories(${OPENSSL_INCLUDE_DIRS})
 # library directory
 add_subdirectory(Managers)
 # server executable
-add_executable(server Server/server.cpp Common/utility.h Common/Message.cpp Server/Classes/Session.cpp Server/Classes/Session.h Server/Classes/User.cpp Server/Classes/User.h)
+add_executable(server Server/server.cpp Common/utility.h Common/Message.cpp Server/Classes/Session.cpp Server/Classes/Session.h Server/Classes/User.cpp Server/Classes/User.h Common/Payload.cpp Common/Payload.h)
 # client executable
-add_executable(client Client/client.cpp Common/utility.h Common/Message.cpp)
+add_executable(client Client/client.cpp Common/utility.h Common/Message.cpp Common/Payload.cpp Common/Payload.h)
 # linking Managers and OpenSSL library
 target_link_libraries(server LINK_PUBLIC Managers crypto)
 target_link_libraries(client LINK_PUBLIC Managers crypto)
