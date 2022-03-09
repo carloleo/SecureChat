@@ -37,6 +37,7 @@ namespace Managers {
         int verify_cert(X509* ca_cert, X509_CRL* crl, X509* cert) ;
         void manage_error(std::string message);
         int generate_random_bytes(unsigned char* bytes,int amount);
+        int generate_nonce(uint32_t* nonce);
     }
 }
 

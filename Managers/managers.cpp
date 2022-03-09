@@ -315,6 +315,7 @@ int Managers::CryptoManager::generate_random_bytes(unsigned char* bytes,int amou
     if(times >= numeric_limits<uint32_t>::max() - 1 ) {
         not_used = RAND_poll();
         OPENSSL_FAIL(not_used,"polling error",0);
+        times = 0;
     }
     not_used = RAND_bytes(bytes,amount);
     if(not_used == -1){
@@ -323,4 +324,14 @@ int Managers::CryptoManager::generate_random_bytes(unsigned char* bytes,int amou
     }
     OPENSSL_FAIL(not_used,"generating rand bytes failed",0)
     return 1;
+}
+
+int Managers::CryptoManager::generate_nonce(uint32_t *nonce) {
+    int result;
+    unsigned char* bytes = new unsigned char[4];
+    result = CryptoManager::generate_random_bytes(bytes,4);
+    if(result)
+        *nonce = (uint32_t )((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]);
+    free(bytes);
+    return result;
 }
