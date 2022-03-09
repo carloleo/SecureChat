@@ -13,8 +13,9 @@ namespace Managers {
         int write_n(int socket, size_t amount, void* buff);
         int read_n(int socket, size_t amount, void* buff);
         int send_message(int socket,Message* msg);
+        int write_string(int socket, std::string str);
         Message* read_message(int socket);
-
+        int read_string(int socket, std::string &str);
     }
     namespace CryptoManager {
         int gcm_encrypt(unsigned char *plaintext, int plaintext_len,

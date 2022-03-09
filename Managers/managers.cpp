@@ -57,6 +57,33 @@ int Managers::SocketManager::read_n(int socket, size_t amount, void *buff) {
     }
     return 1;
 }
+
+int Managers::SocketManager::write_string(int socket, std::string str) {
+    size_t size = str.length();
+    int result;
+    result = SocketManager::write_n(socket,sizeof(size_t),(void*) &size);
+    if( result <= 0)
+        return result;
+    result =  SocketManager::write_n(socket,size,(void*) str.c_str());
+    return result;
+}
+
+int Managers::SocketManager::read_string(int socket, std::string &str) {
+    size_t size;
+    int result;
+    result = SocketManager::read_n(socket,sizeof(size_t),(void*) &size);
+    if(result <= 0)
+        return result;
+    char* data = new char[size+1];
+    result = SocketManager::read_n(socket,size,(void*) data);
+    if(result){
+        data[size] = '\0';
+        str.append(data);
+    }
+    free(data);
+    return result;
+
+}
 int Managers::SocketManager::send_message(int socket, Message *msg) {
     BIO* m_bio = BIO_new(BIO_s_mem());
     int not_used;
@@ -67,10 +94,7 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
         case AUTH_REQUEST:
             tmp = msg->getType();
             not_used = SocketManager::write_n(socket,sizeof(int),(void*)&tmp);
-            tmp = msg->getSender().length();
-            not_used = SocketManager::write_n(socket,sizeof(int), (void*) &tmp);
-            not_used = SocketManager::write_n(socket,msg->getSender().length(),
-                                              (void*) (msg->getSender().c_str()));
+            not_used = SocketManager::write_string(socket,msg->getSender());
             nonce = msg->getPayload()->getNonce();
             cout << nonce << endl;
             not_used = SocketManager::write_n(socket,sizeof(uint32_t),(void*)&nonce);
@@ -93,19 +117,16 @@ Message* Managers::SocketManager::read_message(int socket){
     int not_used;
     int tmp;
     uint32_t nonce;
-    char* username;
+    //char username[MAX_USERNAME];
+    string username;
     OPENSSL_FAIL(m_bio,"allocating bio fail",0)
     int type = 0;
+    size_t size;
     not_used = SocketManager::read_n(socket,sizeof(int),(void*)&type);
     switch (type) {
         case AUTH_REQUEST:
-            not_used = SocketManager::read_n(socket,sizeof(int), (void*) &tmp);
-            cout << tmp << endl;
             //read username
-            username = new char[tmp+1];
-            not_used = SocketManager::read_n(socket,tmp,
-                                              (void*) username);
-            username[tmp + 1] = '\0';
+            not_used = SocketManager::read_string(socket,username);
             cout << username << endl;
             //read nonce
             not_used = SocketManager::read_n(socket,sizeof(uint32_t),(void*)&nonce);

@@ -32,11 +32,11 @@ int main(){
     /*
     Message* message = new Message();
     message->setPayload(new Payload());
-    message->setSender("Alice");
+    message->setSender((string)"Alice");
     message->setType(AUTH_REQUEST);
-    unsigned char* bytes = new unsigned char[4];
-    CryptoManager::generate_random_bytes(bytes,4);
-    message->getPayload()->setNonce((uint32_t )(bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | (bytes[3]));
+    uint32_t nonce ;
+    CryptoManager::generate_nonce(&nonce);
+    message->getPayload()->setNonce(nonce);
     SocketManager::send_message(server_socket,message);
     exit(0);
      */
