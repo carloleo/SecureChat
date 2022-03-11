@@ -22,7 +22,9 @@
             CryptoManager::manage_error(message);                         \
             return error_value;                                  \
        }
-
+#define IF_IO_ERROR(result,error_value) \
+        if(result <= 0) \
+            return error_value;
 using namespace std;
 int Managers::SocketManager::write_n(int socket, size_t amount, void *buff) {
     size_t left = amount;
@@ -86,19 +88,21 @@ int Managers::SocketManager::read_string(int socket, std::string &str) {
 }
 int Managers::SocketManager::send_message(int socket, Message *msg) {
     BIO* m_bio = BIO_new(BIO_s_mem());
-    int not_used;
+    int result;
     uint32_t nonce;
     int tmp;
     OPENSSL_FAIL(m_bio,"allocating bio fail",0)
+
     switch (msg->getType()) {
         case AUTH_REQUEST:
             tmp = msg->getType();
-            not_used = SocketManager::write_n(socket,sizeof(int),(void*)&tmp);
-            not_used = SocketManager::write_string(socket,msg->getSender());
+            result = SocketManager::write_n(socket,sizeof(int),(void*)&tmp);
+            IF_IO_ERROR(result,result)
+            result = SocketManager::write_string(socket,msg->getSender());
+            IF_IO_ERROR(result,result)
             nonce = msg->getPayload()->getNonce();
-            cout << nonce << endl;
-            not_used = SocketManager::write_n(socket,sizeof(uint32_t),(void*)&nonce);
-            return not_used;
+            //cout << nonce << endl;
+            result = SocketManager::write_n(socket,sizeof(uint32_t),(void*)&nonce);
             break;
         case AUTH_RESPONSE:
             break;
@@ -110,11 +114,12 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
             break;
     }
     BIO_free(m_bio);
-    return 1;
+    return result;
 }
 Message* Managers::SocketManager::read_message(int socket){
-    BIO* m_bio = BIO_new(BIO_s_mem());
-    int not_used;
+    //BIO* m_bio = BIO_new(BIO_s_mem());
+    int result;
+    Message* msg = nullptr;
     int tmp;
     uint32_t nonce;
     //char username[MAX_USERNAME];
@@ -122,15 +127,23 @@ Message* Managers::SocketManager::read_message(int socket){
     OPENSSL_FAIL(m_bio,"allocating bio fail",0)
     int type = 0;
     size_t size;
-    not_used = SocketManager::read_n(socket,sizeof(int),(void*)&type);
+    result = SocketManager::read_n(socket,sizeof(int),(void*)&type);
+    IF_IO_ERROR(result, nullptr)
     switch (type) {
         case AUTH_REQUEST:
             //read username
-            not_used = SocketManager::read_string(socket,username);
-            cout << username << endl;
+            result = SocketManager::read_string(socket,username);
+            IF_IO_ERROR(result, nullptr)
+            //cout << username << endl;
             //read nonce
-            not_used = SocketManager::read_n(socket,sizeof(uint32_t),(void*)&nonce);
-            cout << nonce << endl;
+            result = SocketManager::read_n(socket,sizeof(uint32_t),(void*)&nonce);
+            //cout << nonce << endl;
+            if(result){
+                msg = new Message();
+                ISNOT(msg,"allocating message failed")
+                msg->setSender(username);
+                msg->getPayload()->setNonce(nonce);
+            }
             break;
         case AUTH_RESPONSE:
             break;
@@ -141,8 +154,8 @@ Message* Managers::SocketManager::read_message(int socket){
         default:
             break;
     }
-    BIO_free(m_bio);
-    return NULL;
+    //BIO_free(m_bio);
+    return msg;
 }
 int Managers::CryptoManager::gcm_encrypt(unsigned char *plaintext, int plaintext_len,
                                          unsigned char *aad, int aad_len,

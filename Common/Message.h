@@ -22,6 +22,10 @@ private:
     //payload
     Payload* payload;
 public:
+    Message();
+
+    Message(MESSAGE_TYPE type);
+
     MESSAGE_TYPE getType() const;
 
     const std::string &getSender() const;

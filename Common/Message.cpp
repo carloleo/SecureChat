@@ -40,3 +40,8 @@ Message::~Message() {
         delete payload;
 }
 
+Message::Message() {
+    payload = new Payload();
+    ISNOT(payload,"allocating payload failed");
+}
+
