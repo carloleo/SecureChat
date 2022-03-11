@@ -10,12 +10,14 @@
 #include <openssl/pem.h>
 #include <openssl/x509_vfy.h>
 #include <openssl/rand.h>
+#include <openssl/rsa.h>
 #include <iostream>
 #include <string>
 #include <limits>
 
 #define CIPHER  EVP_aes_128_gcm()
 #define DIGEST EVP_sha256()
+#define RSA_SIZE 2048
 #define TAG_LEN 16
 #define OPENSSL_FAIL(result,message,error_value) \
        if(!result){               \
@@ -124,7 +126,7 @@ Message* Managers::SocketManager::read_message(int socket){
     uint32_t nonce;
     //char username[MAX_USERNAME];
     string username;
-    OPENSSL_FAIL(m_bio,"allocating bio fail",0)
+    //OPENSSL_FAIL(m_bio,"allocating bio fail",0)
     int type = 0;
     size_t size;
     result = SocketManager::read_n(socket,sizeof(int),(void*)&type);
@@ -368,4 +370,79 @@ int Managers::CryptoManager::generate_nonce(uint32_t *nonce) {
         *nonce = (uint32_t )((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]);
     free(bytes);
     return result;
+}
+
+int Managers::CryptoManager::generate_ephemeral_rsa(EVP_PKEY** pub_key, EVP_PKEY** pvt_key ) {
+    int not_used;
+    RSA* key_pair;
+    BIGNUM* e;
+    //use bio buffer to store RSA parameter
+    BIO* pub_key_stream;
+    BIO* pvt_key_stream;
+    char* pvt_key_bytes;
+    char* pub_key_bytes;
+    BIO* bio_buff_pub_key;
+    BIO* bio_buff_pvt_key;
+    RSA* tmp_pub_key = nullptr;
+    RSA* tmp_pvt_key = nullptr;
+
+    key_pair = RSA_new();
+    OPENSSL_FAIL(key_pair,"allocating ephemeral keys failed",0)
+    e = BN_new();
+    OPENSSL_FAIL(e,"allocating e failed",0)
+    BN_set_word(e,RSA_F4);
+    //seed before generating ephemeral key pair
+    RAND_poll();
+    not_used = RSA_generate_key_ex(key_pair, RSA_SIZE,e, nullptr);
+    OPENSSL_FAIL(not_used, "generating rsa keys failed", 0)
+    //create bio buffers
+    pub_key_stream = BIO_new(BIO_s_mem());
+    pvt_key_stream = BIO_new(BIO_s_mem());
+    //write public and private key in PEM format into bio
+    OPENSSL_FAIL(pub_key_stream && pvt_key_stream,"allocating key buffers failed ",0)
+    not_used = PEM_write_bio_RSAPublicKey(pub_key_stream,key_pair);
+    OPENSSL_FAIL(not_used,"writing public key over bio stream failed",0)
+    not_used = PEM_write_bio_RSAPrivateKey(pvt_key_stream,key_pair, NULL, NULL, 0, NULL, NULL);
+    OPENSSL_FAIL(not_used,"writing private key over bio stream failed",0)
+    //get keys size
+    auto size_public_key = BIO_pending(pub_key_stream);
+    auto size_private_key = BIO_pending(pvt_key_stream);
+    pub_key_bytes = new char[size_public_key + 1];
+    ISNOT(pub_key_bytes,"allocating char buffer pub_key_byte failed")
+    pvt_key_bytes = new char[size_private_key + 1];
+    ISNOT(pvt_key_bytes,"allocating char buffer pub_key_byte failed")
+    //put keys form bio streams into char buffers
+    not_used = BIO_read(pub_key_stream, pub_key_bytes, size_public_key);
+    OPENSSL_FAIL(not_used,"moving public key from bio stream failed",0)
+    not_used = BIO_read(pvt_key_stream, pvt_key_bytes, size_private_key);
+    OPENSSL_FAIL(not_used,"moving private key from bio stream failed",0)
+    pub_key_bytes[size_public_key] = '\0';
+    pvt_key_bytes[size_private_key] = '\0';
+    //from keys in PEM format to EVP_PKEY
+    bio_buff_pub_key = BIO_new_mem_buf((void*)pub_key_bytes,size_public_key);
+    OPENSSL_FAIL(bio_buff_pub_key,"allocating bio_buff_pub_key failed",0)
+    bio_buff_pvt_key = BIO_new_mem_buf((void*)pvt_key_bytes,size_private_key);
+    OPENSSL_FAIL(bio_buff_pvt_key,"allocating bio_buff_pvt_key failed",0)
+    //get the RSA key from bio memory buffers
+    tmp_pub_key = PEM_read_bio_RSAPublicKey(bio_buff_pub_key,&tmp_pub_key,NULL,NULL);
+    OPENSSL_FAIL(tmp_pub_key,"reading tmp_pub_key failed",0)
+    tmp_pvt_key = PEM_read_bio_RSAPrivateKey(bio_buff_pvt_key,&tmp_pvt_key,NULL,NULL);
+    OPENSSL_FAIL(tmp_pvt_key,"reading tmp_pvt_key failed",0)
+    //put keys into EVP_PKEY to work with OpenSSL
+    not_used = EVP_PKEY_assign_RSA(*pub_key,tmp_pub_key);
+    OPENSSL_FAIL(not_used,"putting public key into EVP data structure failed",0)
+    not_used = EVP_PKEY_assign_RSA(*pvt_key,tmp_pvt_key);
+    OPENSSL_FAIL(not_used,"putting private key into EVP data structure failed",0)
+
+    //cleaning up
+    RSA_free(key_pair);
+    BN_free(e);
+    BIO_free(pub_key_stream);
+    BIO_free(pvt_key_stream);
+    BIO_free_all(bio_buff_pub_key);
+    BIO_free_all(bio_buff_pvt_key);
+    free(pub_key_bytes);
+    free(pvt_key_bytes);
+    //REMINDER: free both input keys
+    return 1;
 }

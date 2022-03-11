@@ -6,7 +6,6 @@
 #define SECURE_CHAT_UTILITY_H
 #include <cerrno>
 #include <string>
-#define  ERROR 1
 #define  SERVER_PORT 8888
 #define  MAX_CHARS (size_t) 10000
 #define KEY_LENGTH 16
@@ -14,12 +13,12 @@
 #define ISNOT(var,message) \
             if(!var){            \
                 perror(message) ; \
-                exit(ERROR);        \
+                exit(EXIT_FAILURE);        \
             }
 #define ISLESSTHANZERO(var,message) \
             if(var < 0){            \
                 perror(message) ; \
-                exit(ERROR);        \
+                exit(EXIT_FAILURE);        \
             }
 enum MESSAGE_TYPE{AUTH_REQUEST,AUTH_RESPONSE,AUTH_KEY_EXCHANGE,AUTH_KEY_EXCHANGE_RESPONSE,REQUEST_TO_TALK, REQUEST_OK, REQUEST_KO,DATA};
 #endif //SECURECHAT_UTILITY_H

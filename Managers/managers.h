@@ -39,6 +39,7 @@ namespace Managers {
         void manage_error(std::string message);
         int generate_random_bytes(unsigned char* bytes,int amount);
         int generate_nonce(uint32_t* nonce);
+        int generate_ephemeral_rsa(EVP_PKEY**pub_key, EVP_PKEY**pvt_key);
     }
 }
 
