@@ -6,11 +6,13 @@
 #define SECURECHAT_PAYLOAD_H
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include <iostream>
 
 class Payload {
     unsigned char* signature;
     unsigned char* ciphertext;
     unsigned char* auth_tag;
+    std::string error_message;
     uint32_t nonce;
     EVP_PKEY* t_pub_key; //ephemeral public key
     X509* cert; //certificate
@@ -27,6 +29,8 @@ public:
 
     X509 *getCert() const;
 
+    const std::string &getErrorMessage() const;
+
     void setSignature(unsigned char *signature);
 
     void setCiphertext(unsigned char *ciphertext);
@@ -38,6 +42,8 @@ public:
     void setTPubKey(EVP_PKEY *tPubKey);
 
     void setCert(X509 *cert);
+
+    void setErrorMessage(const std::string &errorMessage);
 
     virtual ~Payload();
 };

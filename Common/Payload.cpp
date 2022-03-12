@@ -63,3 +63,11 @@ Payload::~Payload() {
         free(cert);
 
 }
+
+const std::string &Payload::getErrorMessage() const {
+    return error_message;
+}
+
+void Payload::setErrorMessage(const std::string &errorMessage) {
+    error_message = errorMessage;
+}
