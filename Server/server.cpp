@@ -6,12 +6,21 @@
 #include <vector>
 #include "Classes/Session.h"
 #include "../Managers/managers.h"
-#define USERS_FILE "../Server/Certs/users.txt"
+#define USERS_FILE "../Server/Docs/users.txt"
+#define USERS_PUBKEY "../Server/Docs/"
+#define SERVER_PVT_KEY "SecureChat_key.pem"
+
 using namespace std;
 using namespace Managers;
 int update_max(fd_set set,int fd_max);
-Session* configure_users(void);
+Session* configure_server(void);
 vector<string> parse_line(string line);
+EVP_PKEY* read_public_key(string username);
+int manage_message(int socket, Message* message);
+void disconnect_client(int socket,fd_set* client_set,int* fd_num);
+
+//global
+Session* session;
 int main() {
     int master_socket;
     //client's socket
@@ -22,9 +31,8 @@ int main() {
     fd_set  read_set;
     //socket address
     struct sockaddr_in address;
-    char buff [MAX_CHARS + 1];
-    Session* session = configure_users();
-    delete session;
+    session = configure_server();
+
     master_socket = socket(AF_INET,SOCK_STREAM,0);
     ISLESSTHANZERO(master_socket,"Opening master socket failed");
     cout << "Master socket opened" << endl;
@@ -54,22 +62,14 @@ int main() {
                     if(fd_c > fd_num ) fd_num = fd_c;
                     cout << "Accepted connection " << endl;
                 } else{
-                    //SocketManager::read_message(fd);
-                    //exit(0);
-                    n_byte_read = read(fd,buff,MAX_CHARS);
-                    if(n_byte_read <= 0){ //client done
-                        FD_CLR(fd,&client_set);
-                        fd_num = update_max(client_set,fd_num);
-                        ISLESSTHANZERO(fd_num,"update_max failed")
-                        close(fd);
-                        cout << "Client done!!" << endl;
+                    Message* message = SocketManager::read_message(fd);
+                    if(!message){ //client done or i/o error
+                        disconnect_client(fd,&client_set,&fd_num);
                     }
                     else{
-                        cout <<"read: " <<  buff << endl;
-                        string reply = "I'm doing so well!! se you later";
-                        size_t size = reply.length();
-                        not_used = SocketManager::write_n(fd,size,(void*) reply.c_str());
-                        cout << "Replied with result " << not_used << endl;
+                        int r = manage_message(fd,message);
+                        if(!r)
+                            disconnect_client(fd,&client_set,&fd_num);
                     }
                 }
 
@@ -87,7 +87,7 @@ int update_max(fd_set set,int fd_max){
     return -1;
 }
 
-Session* configure_users(void){
+Session* configure_server(void){
     Session* session = new Session();
     vector<string> usernames;
     string line;
@@ -97,12 +97,23 @@ Session* configure_users(void){
     while(users_file.is_open() && getline(users_file,line)){
         usernames = parse_line(line);
         for(auto username : usernames) {
-            //cout << username << endl;
-            session->add_user(username);
+            User* user = new User();
+            user->setUserName(username);
+            EVP_PKEY* pub_key = read_public_key(username);
+            user->setPublicKey(pub_key);
+            session->add_user(user);
         }
-
     }
     users_file.close();
+    //now set server private key
+    FILE* file;
+    EVP_PKEY* pvt_key;
+    string filename = (string) USERS_PUBKEY + SERVER_PVT_KEY;
+    file = fopen(filename.c_str(),"r");
+    ISNOT(file,"opening server private key fail failed")
+    pvt_key = PEM_read_PrivateKey(file,NULL,NULL,NULL);
+    ISNOT(pvt_key,"reading server pvt key failed")
+    session->setServerPvtKey(pvt_key);
     return session;
 }
 
@@ -120,3 +131,52 @@ vector<string> parse_line(string line){
         tokens.push_back(line);
     return tokens;
 }
+
+EVP_PKEY* read_public_key(string username){
+    EVP_PKEY* public_key;
+    FILE* file;
+    string filename = (string) USERS_PUBKEY + username + ".pem";
+    file = fopen(filename.c_str(),"r");
+    ISNOT(file,"opening users public key failed")
+    public_key = PEM_read_PUBKEY(file,NULL,NULL,NULL);
+    cout << "size: " << EVP_PKEY_size(public_key) << endl;
+    BIO_dump_fp(stdout,(const char*) public_key, EVP_PKEY_size(public_key));
+    fclose(file);
+    return public_key;
+}
+int manage_message(int socket, Message* message){
+    string sender = message->getSender();
+    Message *reply = new Message();
+    uint32_t nonce;
+    int result = 0;
+    switch (message->getType()) {
+        case AUTH_REQUEST:
+            if(!session->is_registered(sender)){
+                delete message;
+                reply->setType(ERROR);
+                reply->getPayload()->setErrorMessage((string)"Invalid username");
+                SocketManager::send_message(socket,reply);
+                delete reply;
+                break; //returns invalid username
+            }
+            result = CryptoManager::generate_nonce(&nonce);
+            if(!result)
+                break;
+            //CryptoManager::sign()
+            break;
+        default:
+            cerr << "wrong type!!" << endl;
+
+    }
+    return result;
+}
+
+void disconnect_client(int socket,fd_set* client_set,int* fd_num){
+    FD_CLR(socket,client_set);
+    *fd_num = update_max(*client_set,*fd_num);
+    ISLESSTHANZERO(*fd_num,"update_max failed")
+    close(socket);
+    //TODO: put user offline
+    cout << "Client done!!" << endl;
+}
+
