@@ -37,7 +37,7 @@ Session::~Session(){
 }
 
 bool Session::is_registered(std::string username){
-    return users.find(username) == users.end();
+    return users.find(username) != users.end();
 }
 
 void Session::add_ephemeral_keys(string username,pair<EVP_PKEY*,EVP_PKEY*> eph_keys){
@@ -49,4 +49,16 @@ pair<EVP_PKEY*,EVP_PKEY*> Session::get_ephemeral_keys(std::string username){
 
 void Session::setServerPvtKey(EVP_PKEY *serverPvtKey) {
     server_pvt_key = serverPvtKey;
+}
+
+EVP_PKEY *Session::getServerPvtKey() const {
+    return server_pvt_key;
+}
+
+X509 *Session::getServerCert() const {
+    return server_cert;
+}
+
+void Session::setServerCert(X509 *serverCert) {
+    server_cert = serverCert;
 }

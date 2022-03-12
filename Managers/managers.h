@@ -16,6 +16,11 @@ namespace Managers {
         int write_string(int socket, std::string str);
         Message* read_message(int socket);
         int read_string(int socket, std::string &str);
+        int send_certificate(int socket, X509* cert);
+        int send_public_key(int socket, EVP_PKEY* pubkey);
+
+        int read_certificate(int socket, X509** cert);
+        int read_public_key(int socket, EVP_PKEY** pubkey);
     }
     namespace CryptoManager {
         int gcm_encrypt(unsigned char *plaintext, int plaintext_len,
@@ -33,6 +38,9 @@ namespace Managers {
         unsigned char* sign(unsigned char*plaintext, uint64_t plain_size , EVP_PKEY* sign_key,uint32_t* sgnt_size);
         int verify_signature(unsigned  char*signature, uint32_t  signature_size, unsigned  char* plain_text, uint64_t
                                 plain_size, EVP_PKEY* pub_key);
+        unsigned char* sign_pubKey(EVP_PKEY *pubkey,EVP_PKEY *pvtkey,uint32_t nonce, uint32_t* signature_size);
+        int verify_signed_pubKey(EVP_PKEY *pubkey_signed, uint32_t nonce, EVP_PKEY *pubkey,
+                                 unsigned  char* signature, uint32_t signature_size);
         X509* open_certificate(std::string path);
         X509_CRL* open_crl(std::string path);
         int verify_cert(X509* ca_cert, X509_CRL* crl, X509* cert) ;

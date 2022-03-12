@@ -17,12 +17,14 @@ private:
     uint32_t cert_len; // certificate length
     uint32_t c_txt_len; //ciphertext length
     uint32_t sequence_n; //sequence number
+    uint32_t signature_len;
     std::string sender;
     std::string recipient;
     //payload
     Payload* payload;
 public:
     Message();
+
 
     Message(MESSAGE_TYPE type);
 
@@ -34,6 +36,17 @@ public:
 
     Payload *getPayload() const;
 
+    uint32_t getTPkLen() const;
+
+    uint32_t getCertLen() const;
+
+    uint32_t getCTxtLen() const;
+
+    uint32_t getSequenceN() const;
+
+    uint32_t getSignatureLen() const;
+
+
     void setType(MESSAGE_TYPE type);
 
     void setSender(const std::string &sender);
@@ -41,6 +54,16 @@ public:
     void setRecipient(const std::string &recipient);
 
     void setPayload(Payload *payload);
+
+    void setTPkLen(uint32_t tPkLen);
+
+    void setCertLen(uint32_t certLen);
+
+    void setCTxtLen(uint32_t cTxtLen);
+
+    void setSequenceN(uint32_t sequenceN);
+
+    void setSignatureLen(uint32_t signatureLen);
 
     virtual ~Message();
 };

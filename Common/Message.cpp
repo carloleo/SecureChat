@@ -45,3 +45,43 @@ Message::Message() {
     ISNOT(payload,"allocating payload failed");
 }
 
+uint32_t Message::getTPkLen() const {
+    return t_pk_len;
+}
+
+uint32_t Message::getCertLen() const {
+    return cert_len;
+}
+
+uint32_t Message::getCTxtLen() const {
+    return c_txt_len;
+}
+
+uint32_t Message::getSequenceN() const {
+    return sequence_n;
+}
+
+void Message::setTPkLen(uint32_t tPkLen) {
+    t_pk_len = tPkLen;
+}
+
+void Message::setCertLen(uint32_t certLen) {
+    cert_len = certLen;
+}
+
+void Message::setCTxtLen(uint32_t cTxtLen) {
+    c_txt_len = cTxtLen;
+}
+
+void Message::setSequenceN(uint32_t sequenceN) {
+    sequence_n = sequenceN;
+}
+
+uint32_t Message::getSignatureLen() const {
+    return signature_len;
+}
+
+void Message::setSignatureLen(uint32_t signatureLen) {
+    signature_len = signatureLen;
+}
+

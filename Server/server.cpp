@@ -9,6 +9,7 @@
 #define USERS_FILE "../Server/Docs/users.txt"
 #define USERS_PUBKEY "../Server/Docs/"
 #define SERVER_PVT_KEY "SecureChat_key.pem"
+#define SERVER_CERT "SecureChat_cert.pem"
 
 using namespace std;
 using namespace Managers;
@@ -68,6 +69,7 @@ int main() {
                     }
                     else{
                         int r = manage_message(fd,message);
+                        cout << "client result " << r <<endl;
                         if(!r)
                             disconnect_client(fd,&client_set,&fd_num);
                     }
@@ -91,6 +93,7 @@ Session* configure_server(void){
     Session* session = new Session();
     vector<string> usernames;
     string line;
+    X509* cert;
     fstream users_file(USERS_FILE);
     cout << USERS_FILE << endl;
     cout << users_file.is_open() << endl;
@@ -112,8 +115,14 @@ Session* configure_server(void){
     file = fopen(filename.c_str(),"r");
     ISNOT(file,"opening server private key fail failed")
     pvt_key = PEM_read_PrivateKey(file,NULL,NULL,NULL);
+    fclose(file);
     ISNOT(pvt_key,"reading server pvt key failed")
     session->setServerPvtKey(pvt_key);
+    //set server cert
+    string cert_path = (string) USERS_PUBKEY + SERVER_CERT;
+    cert = Managers::CryptoManager::open_certificate(cert_path);
+    ISNOT(cert,"loading server certificate failed ")
+    session->setServerCert(cert);
     return session;
 }
 
@@ -140,34 +149,59 @@ EVP_PKEY* read_public_key(string username){
     ISNOT(file,"opening users public key failed")
     public_key = PEM_read_PUBKEY(file,NULL,NULL,NULL);
     cout << "size: " << EVP_PKEY_size(public_key) << endl;
-    BIO_dump_fp(stdout,(const char*) public_key, EVP_PKEY_size(public_key));
+    //BIO_dump_fp(stdout,(const char*) public_key, EVP_PKEY_size(public_key));
     fclose(file);
     return public_key;
 }
 int manage_message(int socket, Message* message){
     string sender = message->getSender();
     Message *reply = new Message();
-    uint32_t nonce;
+    uint32_t signature_size =0;
+    EVP_PKEY * eph_pubkey;
+    EVP_PKEY * eph_pvtkey;
+    unsigned char* signature;
     int result = 0;
     switch (message->getType()) {
         case AUTH_REQUEST:
             if(!session->is_registered(sender)){
                 delete message;
+                cerr << "WRONG USERNAME" << endl;
                 reply->setType(ERROR);
                 reply->getPayload()->setErrorMessage((string)"Invalid username");
                 SocketManager::send_message(socket,reply);
                 delete reply;
                 break; //returns invalid username
             }
-            result = CryptoManager::generate_nonce(&nonce);
-            if(!result)
-                break;
-            //CryptoManager::sign()
+
+            eph_pubkey = EVP_PKEY_new();
+            eph_pvtkey = EVP_PKEY_new();
+            result = CryptoManager::generate_ephemeral_rsa(&eph_pubkey,&eph_pvtkey);
+            if(result){
+                signature = CryptoManager::sign_pubKey(eph_pubkey,session->getServerPvtKey(),
+                                           message->getPayload()->getNonce(),&signature_size);
+                if(signature){
+                    reply->setType(AUTH_RESPONSE);
+                    reply->setSignatureLen(signature_size);
+                    reply->getPayload()->setSignature(signature);
+                    reply->getPayload()->setTPubKey(eph_pubkey);
+                    reply->getPayload()->setCert(session->getServerCert());
+                    result = SocketManager::send_message(socket,reply);
+                    if(result){
+                        pair<EVP_PKEY*,EVP_PKEY*> ephemeral_pair;
+                        ephemeral_pair.first = eph_pubkey;
+                        ephemeral_pair.second = eph_pvtkey;
+                        //save ephemeral keys to complete the handshake
+                        session->add_ephemeral_keys(sender,ephemeral_pair);
+                    }
+                }
+
+            }
             break;
         default:
             cerr << "wrong type!!" << endl;
 
     }
+    delete reply;
     return result;
 }
 

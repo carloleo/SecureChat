@@ -9,6 +9,7 @@
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/x509_vfy.h>
+#include <openssl/x509.h>
 #include <openssl/rand.h>
 #include <openssl/rsa.h>
 #include <iostream>
@@ -21,12 +22,14 @@
 #define TAG_LEN 16
 #define OPENSSL_FAIL(result,message,error_value) \
        if(!result){               \
-            CryptoManager::manage_error(message);                         \
+            Managers::CryptoManager::manage_error(message);                         \
             return error_value;                                  \
        }
 #define IF_IO_ERROR(result,error_value) \
-        if(result <= 0) \
-            return error_value;
+        if(result <= 0){                 \
+            perror("I/O ERROR");                                \
+            return error_value; \
+        }
 using namespace std;
 int Managers::SocketManager::write_n(int socket, size_t amount, void *buff) {
     size_t left = amount;
@@ -39,6 +42,7 @@ int Managers::SocketManager::write_n(int socket, size_t amount, void *buff) {
             else if( errno == EPIPE) return 0; //ignore
             return -1;
         }
+        if(n == 0) return 0;
         left -= n;
         buff_ptr += n;
 
@@ -56,6 +60,7 @@ int Managers::SocketManager::read_n(int socket, size_t amount, void *buff) {
             else if (errno == ECONNRESET) return 0; //ignore
             return -1;
         }
+        if(n == 0) return 0;
         left -= n;
         buff_ptr += n;
     }
@@ -71,7 +76,84 @@ int Managers::SocketManager::write_string(int socket, std::string str) {
     result =  SocketManager::write_n(socket,size,(void*) str.c_str());
     return result;
 }
+int Managers::SocketManager::send_certificate(int socket, X509 *cert) {
+    int result;
+    char* cert_buff = NULL;
+    long size;
+    BIO* stream = BIO_new(BIO_s_mem());
+    OPENSSL_FAIL(stream,"allocating bio stream failed",0)
+    result = PEM_write_bio_X509(stream,cert);
+    OPENSSL_FAIL(result,"writing cert on bio stream failed",0)
+    size = BIO_get_mem_data(stream,&cert_buff);
+    OPENSSL_FAIL(size,"getting cert from bio stream failed",0)
+    //send certificate size
+    result = SocketManager::write_n(socket,sizeof(long), (void*) &size);
+    IF_IO_ERROR(result,result);
+    //send certificate
+    result = SocketManager::write_n(socket,size, (void*) cert_buff);
+    BIO_free(stream);
+    return  result;
+}
 
+int Managers::SocketManager::send_public_key(int socket, EVP_PKEY *pubkey) {
+    int result;
+    char* pub_key_buff = NULL;
+    long size;
+    BIO* stream = BIO_new(BIO_s_mem());
+    OPENSSL_FAIL(stream,"allocating bio stream failed",0)
+    result = PEM_write_bio_PUBKEY(stream,pubkey);
+    OPENSSL_FAIL(result,"writing pubkey on bio stream failed",0)
+    size = BIO_get_mem_data(stream,&pub_key_buff);
+    OPENSSL_FAIL(size,"getting pubkey from bio stream failed",0)
+    //send public key size
+    result = SocketManager::write_n(socket,sizeof(long), (void*) &size);
+    IF_IO_ERROR(result,result);
+    //send pub key
+    result = SocketManager::write_n(socket,size, (void*) pub_key_buff);
+    BIO_free(stream);
+    return  result;
+}
+
+int Managers::SocketManager::read_certificate(int socket, X509 **cert) {
+    int result;
+    unsigned char* cert_buff = NULL;
+    long size;
+    BIO* stream;
+    result = SocketManager::read_n(socket,sizeof(long),(void*) &size);
+    IF_IO_ERROR(result,result);
+    cert_buff = new unsigned char[size];
+    result = SocketManager::read_n(socket,size,(void*) cert_buff);
+    IF_IO_ERROR(result,result);
+    stream = BIO_new(BIO_s_mem());
+    OPENSSL_FAIL(stream,"allocating bio stream failed",0)
+    result = BIO_write(stream,cert_buff,size);
+    OPENSSL_FAIL(stream,"writing certificate to bio stream failed",0)
+    *cert = PEM_read_bio_X509(stream, NULL,NULL,NULL);
+    BIO_free(stream);
+    return *cert != NULL ? 1 : 0;
+
+
+}
+
+int Managers::SocketManager::read_public_key(int socket, EVP_PKEY **pubkey) {
+    int result;
+    unsigned char* pub_key_buff = NULL;
+    long size;
+    BIO* stream;
+    result = SocketManager::read_n(socket,sizeof(long),(void*) &size);
+    IF_IO_ERROR(result,result);
+    pub_key_buff = new unsigned char[size];
+    result = SocketManager::read_n(socket,size,(void*) pub_key_buff);
+    IF_IO_ERROR(result,result);
+    stream = BIO_new(BIO_s_mem());
+    OPENSSL_FAIL(stream,"allocating bio stream failed",0)
+    result = BIO_write(stream,pub_key_buff,size);
+    OPENSSL_FAIL(stream,"writing pub key to bio stream failed",0)
+    *pubkey = PEM_read_bio_PUBKEY(stream, NULL,NULL,NULL);
+    BIO_free(stream);
+    return *pubkey != NULL ? 1 : 0;
+
+}
 int Managers::SocketManager::read_string(int socket, std::string &str) {
     size_t size;
     int result;
@@ -89,17 +171,16 @@ int Managers::SocketManager::read_string(int socket, std::string &str) {
 
 }
 int Managers::SocketManager::send_message(int socket, Message *msg) {
-    BIO* m_bio = BIO_new(BIO_s_mem());
     int result;
     uint32_t nonce;
     int tmp;
-    OPENSSL_FAIL(m_bio,"allocating bio fail",0)
-
+    uint32_t len;
+    //send type
+    tmp = msg->getType();
+    result = SocketManager::write_n(socket,sizeof(int),(void*)&tmp);
+    IF_IO_ERROR(result,result)
     switch (msg->getType()) {
         case AUTH_REQUEST:
-            tmp = msg->getType();
-            result = SocketManager::write_n(socket,sizeof(int),(void*)&tmp);
-            IF_IO_ERROR(result,result)
             result = SocketManager::write_string(socket,msg->getSender());
             IF_IO_ERROR(result,result)
             nonce = msg->getPayload()->getNonce();
@@ -107,21 +188,26 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*)&nonce);
             break;
         case AUTH_RESPONSE:
+            len = msg->getSignatureLen();
+            result = SocketManager::write_n(socket, sizeof(uint32_t),(void*)&len);
+            result = SocketManager::write_n(socket,len,
+                                            (void*) msg->getPayload()->getSignature());
+            IF_IO_ERROR(result,result)
+            //send ephemeral public key
+            result = SocketManager::send_public_key(socket,msg->getPayload()->getTPubKey());
+            IF_IO_ERROR(result,result)
+            result = SocketManager::send_certificate(socket,msg->getPayload()->getCert());
             break;
         case AUTH_KEY_EXCHANGE:
             break;
         case AUTH_KEY_EXCHANGE_RESPONSE:
             break;
         case ERROR:
-            tmp = msg->getType();
-            result = SocketManager::write_n(socket,sizeof(int),(void*)&tmp);
-            IF_IO_ERROR(result,result)
             result = SocketManager::write_string(socket,msg->getPayload()->getErrorMessage());
             break;
         default:
             break;
     }
-    BIO_free(m_bio);
     return result;
 }
 Message* Managers::SocketManager::read_message(int socket){
@@ -130,7 +216,11 @@ Message* Managers::SocketManager::read_message(int socket){
     Message* msg = nullptr;
     int tmp;
     uint32_t nonce;
-    //char username[MAX_USERNAME];
+    EVP_PKEY* pub_key = NULL;
+    X509* cert = NULL;
+    unsigned char* signature;
+    uint32_t signature_len;
+
     string username;
     string error_message;
     //OPENSSL_FAIL(m_bio,"allocating bio fail",0)
@@ -156,6 +246,27 @@ Message* Managers::SocketManager::read_message(int socket){
             }
             break;
         case AUTH_RESPONSE:
+            //signature length
+            result = SocketManager::read_n(socket, sizeof(uint32_t),(void*)&signature_len);
+            IF_IO_ERROR(result, nullptr)
+            //read signature
+            result = SocketManager::read_n(socket,signature_len,
+                                            (void*) signature);
+            IF_IO_ERROR(result, nullptr)
+            //read ephemeral public key
+            result = SocketManager::read_public_key(socket,&pub_key);
+            IF_IO_ERROR(result, nullptr)
+            //read certificate
+            result = SocketManager::read_certificate(socket,&cert);
+            if(result){
+                msg = new Message();
+                msg->setType(AUTH_RESPONSE);
+                msg->setSignatureLen(signature_len);
+                msg->getPayload()->setSignature(signature);
+                msg->getPayload()->setTPubKey(pub_key);
+                msg->getPayload()->setCert(cert);
+            }
+
             break;
         case AUTH_KEY_EXCHANGE:
             break;
@@ -282,7 +393,6 @@ unsigned char* Managers::CryptoManager::sign(unsigned char *plaintext, uint64_t 
     not_used = EVP_SignFinal(md_ctx, sgnt_buff, sgnt_size, sign_key);
     OPENSSL_FAIL(not_used,"finalizing signature failed", nullptr)
 
-
     // delete the digest and the private key from memory:
     EVP_MD_CTX_free(md_ctx);
     //EVP_PKEY_free(prvkey);
@@ -300,6 +410,8 @@ int Managers::CryptoManager::verify_signature(unsigned  char*signature, uint32_t
     not_used =  EVP_VerifyUpdate(md_ctx, plain_text, plain_size);
     OPENSSL_FAIL(not_used,"very update failed", 0)
     result = EVP_VerifyFinal(md_ctx,signature,signature_size,pub_key);
+    if(result <= 0)
+        CryptoManager::manage_error("verification signature failed");
     EVP_MD_CTX_free(md_ctx);
     return result == 1 ? result : 0;
 }
@@ -353,7 +465,8 @@ int Managers::CryptoManager::verify_cert(X509* ca_cert, X509_CRL* crl, X509* cer
     not_used = X509_STORE_CTX_init(ctx_store,store,cert,NULL);
     OPENSSL_FAIL(not_used,"initializing ctx_store failed",0)
     //verify cert
-    int result = X509_verify_cert(ctx_store);
+    int result = 0;
+    result = X509_verify_cert(ctx_store);
     //clean up
     X509_STORE_free(store);
     X509_STORE_CTX_free(ctx_store);
@@ -462,4 +575,44 @@ int Managers::CryptoManager::generate_ephemeral_rsa(EVP_PKEY** pub_key, EVP_PKEY
     free(pvt_key_bytes);
     //REMINDER: free both input keys
     return 1;
+}
+
+unsigned char* Managers::CryptoManager::sign_pubKey(EVP_PKEY *pubkey,EVP_PKEY *pvtkey,uint32_t nonce,
+                                                    uint32_t* signature_size){
+    unsigned char* signature;
+    int not_used;
+    BIO* stream = BIO_new(BIO_s_mem());
+    OPENSSL_FAIL(stream,"allocating bio stream failed", nullptr)
+    not_used = PEM_write_bio_PUBKEY(stream,pubkey);
+    OPENSSL_FAIL(not_used,"writing pubkey on bio stream failed", nullptr);
+    not_used = BIO_write(stream,(void*) &nonce,sizeof(uint32_t));
+    OPENSSL_FAIL(not_used,"writing nonce on bio stream failed", nullptr);
+    int plain_size = BIO_pending(stream);
+    unsigned char* plain_text = new unsigned char[plain_size];
+    ISNOT(plain_text,"allocating plaintext buffer failed")
+    not_used = BIO_read(stream,(void*) plain_text,plain_size);
+    OPENSSL_FAIL(not_used,"reading from bio stream failed", nullptr);
+    signature = CryptoManager::sign(plain_text,plain_size,pvtkey,signature_size);
+    //cleaning up
+    BIO_free(stream);
+    free(plain_text);
+    return signature;
+}
+int Managers::CryptoManager::verify_signed_pubKey(EVP_PKEY *pubkey_signed, uint32_t nonce, EVP_PKEY *pubkey,
+                                                  unsigned  char* signature, uint32_t signature_size) {
+    int not_used;
+    BIO* stream = BIO_new(BIO_s_mem());
+    OPENSSL_FAIL(stream,"allocating bio stream failed", 0)
+    not_used = PEM_write_bio_PUBKEY(stream,pubkey_signed);
+    OPENSSL_FAIL(not_used,"writing pubkey on bio stream failed", 0);
+    not_used = BIO_write(stream,(void*) &nonce,sizeof(uint32_t));
+    OPENSSL_FAIL(not_used,"writing nonce on bio stream failed", 0);
+    int plain_size = BIO_pending(stream);
+    unsigned char* plain_text = new unsigned char[plain_size];
+    ISNOT(plain_text,"allocating plaintext buffer failed")
+    ISNOT(plain_text,"allocating plaintext buffer failed")
+    not_used = BIO_read(stream,(void*) plain_text,plain_size);
+    OPENSSL_FAIL(not_used,"reading from bio stream failed", 0);
+    not_used = CryptoManager::verify_signature(signature,signature_size,plain_text,plain_size,pubkey);
+    return not_used;
 }
