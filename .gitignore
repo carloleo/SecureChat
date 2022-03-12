@@ -1,5 +1,5 @@
 cmake-build-debug/*
 .idea/*
 CMakeFiles/*
-Server/Certs/*
+Server/Docs/*
 Client/Certs/*
