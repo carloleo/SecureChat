@@ -112,6 +112,12 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
             break;
         case AUTH_KEY_EXCHANGE_RESPONSE:
             break;
+        case ERROR:
+            tmp = msg->getType();
+            result = SocketManager::write_n(socket,sizeof(int),(void*)&tmp);
+            IF_IO_ERROR(result,result)
+            result = SocketManager::write_string(socket,msg->getPayload()->getErrorMessage());
+            break;
         default:
             break;
     }
@@ -126,6 +132,7 @@ Message* Managers::SocketManager::read_message(int socket){
     uint32_t nonce;
     //char username[MAX_USERNAME];
     string username;
+    string error_message;
     //OPENSSL_FAIL(m_bio,"allocating bio fail",0)
     int type = 0;
     size_t size;
@@ -143,6 +150,7 @@ Message* Managers::SocketManager::read_message(int socket){
             if(result){
                 msg = new Message();
                 ISNOT(msg,"allocating message failed")
+                msg->setType(AUTH_REQUEST);
                 msg->setSender(username);
                 msg->getPayload()->setNonce(nonce);
             }
@@ -152,6 +160,15 @@ Message* Managers::SocketManager::read_message(int socket){
         case AUTH_KEY_EXCHANGE:
             break;
         case AUTH_KEY_EXCHANGE_RESPONSE:
+            break;
+        case ERROR:
+            result = SocketManager::read_string(socket, error_message);
+            if(result){
+                msg = new Message();
+                ISNOT(msg,"allocating message failed")
+                msg->setType(ERROR);
+                msg->getPayload()->setErrorMessage(error_message);
+            }
             break;
         default:
             break;
