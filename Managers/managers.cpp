@@ -604,7 +604,6 @@ int Managers::CryptoManager::generate_ephemeral_rsa(EVP_PKEY** pub_key, EVP_PKEY
     OPENSSL_FAIL(not_used,"putting public key into EVP data structure failed",0)
     not_used = EVP_PKEY_assign_RSA(*pvt_key,tmp_pvt_key);
     OPENSSL_FAIL(not_used,"putting private key into EVP data structure failed",0)
-
     //cleaning up
     RSA_free(key_pair);
     BN_free(e);
@@ -657,15 +656,17 @@ int Managers::CryptoManager::verify_signed_pubKey(EVP_PKEY *pubkey_signed, uint3
     return not_used;
 }
 //do not allocate ciphertext buffer
-int Managers::CryptoManager::rsa_encrypt(unsigned char* ciphertext, size_t* ciphertext_len, unsigned char* plaintext,
+int Managers::CryptoManager::rsa_encrypt(unsigned char** ciphertext, size_t* ciphertext_len, unsigned char* plaintext,
                                          uint32_t plain_size,EVP_PKEY* pub_key) {
     EVP_PKEY_CTX *ctx;
     ENGINE* eng;
     int not_used;
-
+    /*
     eng = ENGINE_new();
+    //eng = ENGINE_new();
     OPENSSL_FAIL(eng,"retrieving rsa engine failed",0)
-    ENGINE_set_RSA(eng, RSA_get_default_method());
+    not_used = ENGINE_set_default_ciphers(eng);
+    OPENSSL_FAIL(not_used,"ini",0);
     ctx = EVP_PKEY_CTX_new(pub_key,eng);
     OPENSSL_FAIL(ctx,"allocating evp ctx failed",0)
     not_used = EVP_PKEY_encrypt_init(ctx);
@@ -677,7 +678,21 @@ int Managers::CryptoManager::rsa_encrypt(unsigned char* ciphertext, size_t* ciph
     }
     ciphertext =  new unsigned char[*ciphertext_len];
     ISNOT(ciphertext,"rsa_encrypt allocating ciphertext failed")
+     */
+    RSA* r = EVP_PKEY_get0_RSA(pub_key);
+    OPENSSL_FAIL(r,"EVP_PKEY_get0_RSA",0);
+    *ciphertext = new unsigned char[RSA_size(r)];
+    ISNOT(ciphertext,"allocating buffer during rsa encryption failed")
+    not_used = RSA_public_encrypt(plain_size,plaintext,*ciphertext,r,RSA_PKCS1_PADDING);
+    if(not_used < 0){
+        CryptoManager::manage_error("RSA_public_encrypt");
+        return 0;
+    }
+    OPENSSL_FAIL(not_used,"rsa encryption failed",0)
+    *ciphertext_len = not_used;
+    return 1;
 
+    /*
     //encrypt and take the actual size of ciphertext
     if(EVP_PKEY_encrypt(ctx, ciphertext, ciphertext_len, plaintext, plain_size) <= 0){
         CryptoManager::manage_error("rsa encryption failed");
@@ -685,15 +700,15 @@ int Managers::CryptoManager::rsa_encrypt(unsigned char* ciphertext, size_t* ciph
     }
     ENGINE_free(eng);
     EVP_PKEY_CTX_free(ctx);
-    return 1;
+    return 1;*/
 }
 //do not allocate plaintext buffer
-int Managers::CryptoManager::rsa_decrypt(unsigned char *ciphertext, size_t ciphertext_len, unsigned char *plaintext,
+int Managers::CryptoManager::rsa_decrypt(unsigned char *ciphertext, size_t ciphertext_len, unsigned char **plaintext,
                                          size_t *plain_size, EVP_PKEY *pvt_key) {
     EVP_PKEY_CTX *ctx;
     ENGINE* eng;
     int not_used;
-
+    /*
     eng = ENGINE_new();
     OPENSSL_FAIL(eng,"retrieving rsa engine failed",0)
     ENGINE_set_RSA(eng, RSA_get_default_method());
@@ -717,18 +732,32 @@ int Managers::CryptoManager::rsa_decrypt(unsigned char *ciphertext, size_t ciphe
     }
     ENGINE_free(eng);
     EVP_PKEY_CTX_free(ctx);
+     */
+    RSA* r = EVP_PKEY_get0_RSA(pvt_key);
+    OPENSSL_FAIL(r,"EVP_PKEY_get0_RSA",0);
+    *plaintext = new unsigned char[RSA_size(r)];
+    ISNOT(*plaintext,"allocating buffer during rsa encryption failed")
+    not_used = RSA_private_decrypt(ciphertext_len,ciphertext,*plaintext,r,RSA_PKCS1_PADDING);
+    if(not_used < 0){
+        CryptoManager::manage_error("RSA_private_decrypt");
+        return 0;
+    }
+    OPENSSL_FAIL(not_used,"rsa encryption failed",0)
+    *plain_size = not_used;
+    return 1;
+
 }
 
-int Managers::CryptoManager::pkey_to_bytes(EVP_PKEY *pkey, unsigned char *pkey_bytes,uint32_t* bytes_size) {
+int Managers::CryptoManager::pkey_to_bytes(EVP_PKEY *pkey, unsigned char **pkey_bytes,uint32_t* bytes_size) {
     int result = 0;
     BIO* stream = BIO_new(BIO_s_mem());
     OPENSSL_FAIL(stream,"allocating bio stream failed", 0)
     result = PEM_write_bio_PUBKEY(stream,pkey);
     OPENSSL_FAIL(result,"writing pubkey on bio stream failed", 0);
     long size = BIO_pending(stream);
-    pkey_bytes = new unsigned char[size];
+    *pkey_bytes = new unsigned char[size];
     ISNOT(pkey_bytes,"allocating pkey_bytes failed")
-    result =  BIO_read(stream,(void*) pkey_bytes,size);
+    result =  BIO_read(stream,(void*) *pkey_bytes,size);
     OPENSSL_FAIL(result,"reading pkey_bytes failed",0)
     *bytes_size = size;
     BIO_free(stream);

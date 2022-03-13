@@ -69,7 +69,6 @@ int main() {
                     }
                     else{
                         int r = manage_message(fd,message);
-                        cout << "client result " << r <<endl;
                         if(!r)
                             disconnect_client(fd,&client_set,&fd_num);
                     }
@@ -169,6 +168,7 @@ int manage_message(int socket, Message* message){
     unsigned char* to_verify;
     unsigned char* plaintext;
     size_t plain_size;
+    EVP_PKEY* client_pub_key;
     switch (message->getType()) {
         case AUTH_REQUEST:
             if(!session->is_registered(sender)){
@@ -219,29 +219,30 @@ int manage_message(int socket, Message* message){
             encrypted_k_as = message->getPayload()->getCiphertext();
             eph_keys = session->get_ephemeral_keys(message->getSender());
             uint32_t eph_pub_key_bytes_size;
-            result = CryptoManager::pkey_to_bytes(eph_keys.first,eph_pub_key_bytes,&eph_pub_key_bytes_size);
+            result = CryptoManager::pkey_to_bytes(eph_keys.first,&eph_pub_key_bytes,&eph_pub_key_bytes_size);
             IF_MANAGER_FAILED(result,"obtaining pkey_to_bytes failed",0)
             to_verify = new unsigned char[encrypted_k_as_size + eph_pub_key_bytes_size];
             ISNOT(to_verify,"allocating to_sign failed")
             //copy them into one buffer to be signed
-            memcpy(to_verify,encrypted_k_as,encrypted_k_as_size);
-            to_verify += encrypted_k_as_size;
-            memcpy(to_verify,eph_pub_key_bytes,eph_pub_key_bytes_size);
-            to_verify -= encrypted_k_as_size;
+            memmove(to_verify,encrypted_k_as,encrypted_k_as_size);
+            //move on pointer to put the rest
+            memmove(to_verify + encrypted_k_as_size ,eph_pub_key_bytes,eph_pub_key_bytes_size);
+            //bytes have been copied free memory
             free(encrypted_k_as);
             free(eph_pub_key_bytes);
+            //verify client signature on ciphertext
             signature = message->getPayload()->getSignature();
             signature_size = message->getSignatureLen();
-            result = CryptoManager::verify_signature(signature,signature_size,to_verify,
-                                            (encrypted_k_as_size + eph_pub_key_bytes_size),
-                                            session->get_user(message->getSender())->getPublicKey());
-            cout << "verify client signed key " << result << endl;
+            client_pub_key = session->get_user(sender)->getPublicKey();
+            plain_size = encrypted_k_as_size + eph_pub_key_bytes_size;
+            result = CryptoManager::verify_signature(signature,signature_size,to_verify, plain_size,
+                                            client_pub_key);
+            cout << "verify client's signature " << result << endl;
             //decrypt session key
-            CryptoManager::rsa_decrypt(encrypted_k_as,encrypted_k_as_size,plaintext,
+            CryptoManager::rsa_decrypt(encrypted_k_as,encrypted_k_as_size,&plaintext,
                                        &plain_size,eph_keys.second);
-            for(int i = 0; i < KEY_LENGTH;i++)
-                cout << plaintext[i] << endl;
-
+            for(int i=0; i < KEY_LENGTH; i++)
+                cout << (int) plaintext[i] << endl;
             break;
         default:
             cerr << "wrong type!!" << endl;

@@ -125,36 +125,37 @@ int prepare_third_message(EVP_PKEY* eph_pub_key,Message* msg){
     int result;
     //session key
     unsigned char* k_as;
+    k_as = new unsigned char[KEY_LENGTH];
+    ISNOT(k_as,"k_as allocation failed")
     result = CryptoManager::generate_random_bytes(k_as,KEY_LENGTH);
-    for(int i = 0; i < KEY_LENGTH; i++)
-        cout << k_as[i] << endl;
     IF_MANAGER_FAILED(result,"generating session key failed",0)
     //encrypt session key by server ephemeral public key
     unsigned char* encrypted_k_as;
     size_t encrypted_k_as_size;
-    result = CryptoManager::rsa_encrypt(encrypted_k_as,&encrypted_k_as_size,k_as,
+    result = CryptoManager::rsa_encrypt(&encrypted_k_as,&encrypted_k_as_size,k_as,
                                         KEY_LENGTH,eph_pub_key);
+    cout << result << endl;
     IF_MANAGER_FAILED(result,"encrypting session key failed",0)
     //get bytes from ephemeral server public key
     unsigned char* eph_pub_key_bytes;
     uint32_t eph_pub_key_bytes_size;
-    result = CryptoManager::pkey_to_bytes(eph_pub_key,eph_pub_key_bytes,&eph_pub_key_bytes_size);
+    result = CryptoManager::pkey_to_bytes(eph_pub_key,&eph_pub_key_bytes,&eph_pub_key_bytes_size);
     IF_MANAGER_FAILED(result,"pkey_to_bytes failed",0)
     //sign both of them
     unsigned char* to_sign = new unsigned char[encrypted_k_as_size + eph_pub_key_bytes_size];
     ISNOT(to_sign,"allocating to_sign failed")
     //copy them into one buffer to be signed
-    memcpy(to_sign,encrypted_k_as,encrypted_k_as_size);
-    to_sign += encrypted_k_as_size;
-    memcpy(to_sign,eph_pub_key_bytes,eph_pub_key_bytes_size);
-    to_sign -= encrypted_k_as_size;
-    free(encrypted_k_as);
+    memmove(to_sign,encrypted_k_as,encrypted_k_as_size);
+    //move on pointer to put the rest
+    memmove(to_sign + encrypted_k_as_size ,eph_pub_key_bytes,eph_pub_key_bytes_size);
     free(eph_pub_key_bytes);
+
 
     //sign
     unsigned char* signature;
     uint32_t signature_len;
-    signature = CryptoManager::sign(to_sign,encrypted_k_as_size + eph_pub_key_bytes_size,pvt_client_key,
+    uint32_t plain_size = encrypted_k_as_size + eph_pub_key_bytes_size;
+    signature = CryptoManager::sign(to_sign,plain_size,pvt_client_key,
                         &signature_len);
     IF_MANAGER_FAILED(signature_len,"signing to_sign failed",0)
     msg->setType(AUTH_KEY_EXCHANGE);
@@ -165,6 +166,8 @@ int prepare_third_message(EVP_PKEY* eph_pub_key,Message* msg){
     //set signature
     msg->setSignatureLen(signature_len);
     msg->getPayload()->setSignature(signature);
+    for(int i=0; i < KEY_LENGTH; i++)
+        cout << (int) k_as[i] << endl;
     return 1;
 }
 /*EVP_PKEY* save_cert(X509* cert){
