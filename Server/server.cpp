@@ -228,7 +228,7 @@ int manage_message(int socket, Message* message){
             //move on pointer to put the rest
             memmove(to_verify + encrypted_k_as_size ,eph_pub_key_bytes,eph_pub_key_bytes_size);
             //bytes have been copied free memory
-            free(encrypted_k_as);
+            //free(encrypted_k_as);
             free(eph_pub_key_bytes);
             //verify client signature on ciphertext
             signature = message->getPayload()->getSignature();

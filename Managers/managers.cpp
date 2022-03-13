@@ -578,17 +578,17 @@ int Managers::CryptoManager::generate_ephemeral_rsa(EVP_PKEY** pub_key, EVP_PKEY
     //get keys size
     auto size_public_key = BIO_pending(pub_key_stream);
     auto size_private_key = BIO_pending(pvt_key_stream);
-    pub_key_bytes = new char[size_public_key + 1];
+    pub_key_bytes = new char[size_public_key];
     ISNOT(pub_key_bytes,"allocating char buffer pub_key_byte failed")
-    pvt_key_bytes = new char[size_private_key + 1];
+    pvt_key_bytes = new char[size_private_key];
     ISNOT(pvt_key_bytes,"allocating char buffer pub_key_byte failed")
     //put keys form bio streams into char buffers
     not_used = BIO_read(pub_key_stream, pub_key_bytes, size_public_key);
     OPENSSL_FAIL(not_used,"moving public key from bio stream failed",0)
     not_used = BIO_read(pvt_key_stream, pvt_key_bytes, size_private_key);
     OPENSSL_FAIL(not_used,"moving private key from bio stream failed",0)
-    pub_key_bytes[size_public_key] = '\0';
-    pvt_key_bytes[size_private_key] = '\0';
+   // pub_key_bytes[size_public_key] = '\0';
+    //pvt_key_bytes[size_private_key] = '\0';
     //from keys in PEM format to EVP_PKEY
     bio_buff_pub_key = BIO_new_mem_buf((void*)pub_key_bytes,size_public_key);
     OPENSSL_FAIL(bio_buff_pub_key,"allocating bio_buff_pub_key failed",0)
