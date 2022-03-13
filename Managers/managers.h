@@ -18,9 +18,12 @@ namespace Managers {
         int read_string(int socket, std::string &str);
         int send_certificate(int socket, X509* cert);
         int send_public_key(int socket, EVP_PKEY* pubkey);
-
+        int send_data(int socket,unsigned char* data, uint32_t len);
+        int read_data(int socket,unsigned char** data, uint32_t *len);
         int read_certificate(int socket, X509** cert);
         int read_public_key(int socket, EVP_PKEY** pubkey);
+
+
     }
     namespace CryptoManager {
         int gcm_encrypt(unsigned char *plaintext, int plaintext_len,
@@ -48,6 +51,11 @@ namespace Managers {
         int generate_random_bytes(unsigned char* bytes,int amount);
         int generate_nonce(uint32_t* nonce);
         int generate_ephemeral_rsa(EVP_PKEY**pub_key, EVP_PKEY**pvt_key);
+        int rsa_encrypt(unsigned char* ciphertext, size_t* ciphertext_len, unsigned char* plaintext,
+                        uint32_t plain_size,EVP_PKEY* pub_key);
+        int rsa_decrypt(unsigned char* ciphertext, size_t ciphertext_len, unsigned char* plaintext,
+                        size_t* plain_size,EVP_PKEY* pvt_key);
+        int pkey_to_bytes(EVP_PKEY* pkey,unsigned char* pkey_bytes, uint32_t* bytes_size);
     }
 }
 

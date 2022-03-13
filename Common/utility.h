@@ -20,6 +20,12 @@
                 perror(message) ; \
                 exit(EXIT_FAILURE);        \
             }
+#define IF_MANAGER_FAILED(var,message,error_value) \
+            if(!var){                              \
+              cerr << message << endl;             \
+              return error_value;  \
+            }
+
 enum MESSAGE_TYPE{AUTH_REQUEST,AUTH_RESPONSE,AUTH_KEY_EXCHANGE,AUTH_KEY_EXCHANGE_RESPONSE,REQUEST_TO_TALK, REQUEST_OK,
         REQUEST_KO,DATA,ERROR};
 #endif //SECURECHAT_UTILITY_H

@@ -62,3 +62,7 @@ X509 *Session::getServerCert() const {
 void Session::setServerCert(X509 *serverCert) {
     server_cert = serverCert;
 }
+
+bool Session::is_in_handshake(std::string username) {
+    return ephemeral_keys.find(username) != ephemeral_keys.end();
+}

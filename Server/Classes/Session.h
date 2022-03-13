@@ -20,6 +20,7 @@ public:
     void add_user(User* user);
     void change_status(std::string username, bool is_online);
     bool is_registered(std::string username);
+    bool is_in_handshake(std::string username);
     void add_ephemeral_keys(string username,pair<EVP_PKEY*,EVP_PKEY*> eph_keys);
     pair<EVP_PKEY*,EVP_PKEY*> get_ephemeral_keys(std::string username);
 

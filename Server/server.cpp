@@ -148,7 +148,7 @@ EVP_PKEY* read_public_key(string username){
     file = fopen(filename.c_str(),"r");
     ISNOT(file,"opening users public key failed")
     public_key = PEM_read_PUBKEY(file,NULL,NULL,NULL);
-    cout << "size: " << EVP_PKEY_size(public_key) << endl;
+    //cout << "size: " << EVP_PKEY_size(public_key) << endl;
     //BIO_dump_fp(stdout,(const char*) public_key, EVP_PKEY_size(public_key));
     fclose(file);
     return public_key;
@@ -161,6 +161,14 @@ int manage_message(int socket, Message* message){
     EVP_PKEY * eph_pvtkey;
     unsigned char* signature;
     int result = 0;
+    uint32_t encrypted_k_as_size;
+    unsigned char* encrypted_k_as ;
+    pair<EVP_PKEY*,EVP_PKEY*> eph_keys;
+    uint32_t eph_pub_key_bytes_size;
+    unsigned char* eph_pub_key_bytes;
+    unsigned char* to_verify;
+    unsigned char* plaintext;
+    size_t plain_size;
     switch (message->getType()) {
         case AUTH_REQUEST:
             if(!session->is_registered(sender)){
@@ -197,11 +205,48 @@ int manage_message(int socket, Message* message){
 
             }
             break;
+        case AUTH_KEY_EXCHANGE:
+            if(!session->is_in_handshake(message->getSender())){
+                delete message;
+                cerr << "NOT HANDSHAKE" << endl;
+                reply->setType(ERROR);
+                reply->getPayload()->setErrorMessage((string)"Invalid username");
+                SocketManager::send_message(socket,reply);
+                delete reply;
+                break; //user not in handshake
+            }
+            encrypted_k_as_size = message->getCTxtLen();
+            encrypted_k_as = message->getPayload()->getCiphertext();
+            eph_keys = session->get_ephemeral_keys(message->getSender());
+            uint32_t eph_pub_key_bytes_size;
+            result = CryptoManager::pkey_to_bytes(eph_keys.first,eph_pub_key_bytes,&eph_pub_key_bytes_size);
+            IF_MANAGER_FAILED(result,"obtaining pkey_to_bytes failed",0)
+            to_verify = new unsigned char[encrypted_k_as_size + eph_pub_key_bytes_size];
+            ISNOT(to_verify,"allocating to_sign failed")
+            //copy them into one buffer to be signed
+            memcpy(to_verify,encrypted_k_as,encrypted_k_as_size);
+            to_verify += encrypted_k_as_size;
+            memcpy(to_verify,eph_pub_key_bytes,eph_pub_key_bytes_size);
+            to_verify -= encrypted_k_as_size;
+            free(encrypted_k_as);
+            free(eph_pub_key_bytes);
+            signature = message->getPayload()->getSignature();
+            signature_size = message->getSignatureLen();
+            result = CryptoManager::verify_signature(signature,signature_size,to_verify,
+                                            (encrypted_k_as_size + eph_pub_key_bytes_size),
+                                            session->get_user(message->getSender())->getPublicKey());
+            cout << "verify client signed key " << result << endl;
+            //decrypt session key
+            CryptoManager::rsa_decrypt(encrypted_k_as,encrypted_k_as_size,plaintext,
+                                       &plain_size,eph_keys.second);
+            for(int i = 0; i < KEY_LENGTH;i++)
+                cout << plaintext[i] << endl;
+
+            break;
         default:
             cerr << "wrong type!!" << endl;
 
     }
-    delete reply;
     return result;
 }
 
