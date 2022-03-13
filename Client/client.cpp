@@ -43,10 +43,11 @@ int main(){
     cin >> username;
     ISNOT(cin,"Ooops! something went wrong")
     cout << "authentication in progress..." << endl;
+    //IDE does not allow to open promt
     string pwd;
     cout << "pwd" << endl;
     cin >> pwd;
-   // X509* cert = Managers::CryptoManager::open_certificate((string) "../Server/Docs/SecureChat_cert.pem");
+    //X509* cert = Managers::CryptoManager::open_certificate((string) "../Server/Docs/SecureChat_cert.pem");
     //verify_cert(cert);
     //exit(0);
     //reading client pvt key
@@ -54,7 +55,7 @@ int main(){
     string filename = (string)  CERT_DIR + username + "_key.pem" ;
     file = fopen(filename.c_str(),"r");
     ISNOT(file,"opening client private key fail failed")
-    pvt_client_key = PEM_read_PrivateKey(file,NULL,NULL,(void*)pwd.c_str());
+    pvt_client_key = PEM_read_PrivateKey(file,NULL,NULL,(void*) pwd.c_str());
     fclose(file);
     ISNOT(pvt_client_key,"reading client pvt key failed")
     not_used = authenticate_to_server(server_socket,username);
@@ -99,11 +100,9 @@ int authenticate_to_server(int server_socket, string username){
         return 0;
     //verify received certificate
     server_cert = second_message->getPayload()->getCert();
-    //X509* server_cert = Managers::CryptoManager::open_certificate((string) "../Server/Docs/SecureChat_cert.pem");
-
-    //cout << "verifying sever's cert..." << endl;
-    //result = verify_cert(server_cert);
-    //cout << "result: " << (result == 1) << endl;
+    cout << "verifying sever's cert..." << endl;
+    result = verify_cert(server_cert);
+    cout << "result: " << (result == 1) << endl;
     EVP_PKEY* server_pub_key = X509_get_pubkey(server_cert);
     EVP_PKEY* eph_pub_key = second_message->getPayload()->getTPubKey();
     unsigned char* signature = second_message->getPayload()->getSignature();
