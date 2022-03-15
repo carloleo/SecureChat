@@ -16,6 +16,7 @@
 #include <iostream>
 #include <string>
 #include <limits>
+#include <cstring>
 
 #define CIPHER  EVP_aes_128_gcm()
 #define DIGEST EVP_sha256()
@@ -654,6 +655,36 @@ int Managers::CryptoManager::verify_signed_pubKey(EVP_PKEY *pubkey_signed, uint3
     OPENSSL_FAIL(not_used,"reading from bio stream failed", 0);
     not_used = CryptoManager::verify_signature(signature,signature_size,plain_text,plain_size,pubkey);
     return not_used;
+}
+unsigned char* Managers::CryptoManager::compute_hash(unsigned char *bytes,size_t size,uint32_t * digest_len) {
+    unsigned char* digest;
+    EVP_MD_CTX* ctx;
+    int not_used;
+    digest = new unsigned char[EVP_MD_size(DIGEST)];
+    ISNOT(digest,"allocating session key buffer failed")
+    ctx = EVP_MD_CTX_new();
+    OPENSSL_FAIL(ctx,"allocating digest ctx failed", nullptr)
+    not_used = EVP_DigestInit(ctx, DIGEST);
+    OPENSSL_FAIL(not_used,"initializing hash ctx failed", nullptr)
+    not_used = EVP_DigestUpdate(ctx,bytes,size);
+    OPENSSL_FAIL(not_used,"updating hash ctx failed", nullptr)
+    not_used = EVP_DigestFinal(ctx,digest,digest_len);
+    EVP_MD_CTX_free(ctx);
+    OPENSSL_FAIL(not_used,"finalizing hash ctx failed", nullptr)
+    return digest;
+}
+
+unsigned char* Managers::CryptoManager::compute_session_key(unsigned char *master_secret, size_t ms_size) {
+    unsigned char* session_key;
+    unsigned char* digest;
+    uint32_t digest_len = 0;
+    digest = CryptoManager::compute_hash(master_secret,ms_size,&digest_len);
+    OPENSSL_FAIL(digest,"computing digest failed", nullptr)
+    session_key = new unsigned char[KEY_LENGTH];
+    ISNOT(session_key,"allocating session key failed")
+    memmove(session_key,digest,KEY_LENGTH);
+    free(digest);
+    return session_key;
 }
 //do not allocate ciphertext buffer
 int Managers::CryptoManager::rsa_encrypt(unsigned char** ciphertext, size_t* ciphertext_len, unsigned char* plaintext,

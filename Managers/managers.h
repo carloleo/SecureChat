@@ -42,6 +42,8 @@ namespace Managers {
         int verify_signature(unsigned  char*signature, uint32_t  signature_size, unsigned  char* plain_text, uint64_t
                                 plain_size, EVP_PKEY* pub_key);
         unsigned char* sign_pubKey(EVP_PKEY *pubkey,EVP_PKEY *pvtkey,uint32_t nonce, uint32_t* signature_size);
+        unsigned char* compute_hash(unsigned char *bytes,size_t size,uint32_t* digest_len) ;
+        unsigned char* compute_session_key(unsigned char* master_secret,size_t ms_size);
         int verify_signed_pubKey(EVP_PKEY *pubkey_signed, uint32_t nonce, EVP_PKEY *pubkey,
                                  unsigned  char* signature, uint32_t signature_size);
         X509* open_certificate(std::string path);

@@ -1,6 +1,6 @@
 #include <iostream>
 #include <netinet/in.h>
-#include  <unistd.h>
+#include <unistd.h>
 #include <cstring>
 #include <fstream>
 #include <vector>
@@ -160,8 +160,10 @@ int manage_message(int socket, Message* message){
     EVP_PKEY * eph_pvtkey;
     unsigned char* signature;
     int result = 0;
-    uint32_t encrypted_k_as_size;
-    unsigned char* encrypted_k_as ;
+    uint32_t encrypted_ms_size;
+    unsigned char* encrypted_master_secret ;
+    unsigned char* session_key;
+    unsigned char* digest;
     pair<EVP_PKEY*,EVP_PKEY*> eph_keys;
     uint32_t eph_pub_key_bytes_size;
     unsigned char* eph_pub_key_bytes;
@@ -215,34 +217,40 @@ int manage_message(int socket, Message* message){
                 delete reply;
                 break; //user not in handshake
             }
-            encrypted_k_as_size = message->getCTxtLen();
-            encrypted_k_as = message->getPayload()->getCiphertext();
+            encrypted_ms_size = message->getCTxtLen();
+            encrypted_master_secret = message->getPayload()->getCiphertext();
             eph_keys = session->get_ephemeral_keys(message->getSender());
             uint32_t eph_pub_key_bytes_size;
             result = CryptoManager::pkey_to_bytes(eph_keys.first,&eph_pub_key_bytes,&eph_pub_key_bytes_size);
             IF_MANAGER_FAILED(result,"obtaining pkey_to_bytes failed",0)
-            to_verify = new unsigned char[encrypted_k_as_size + eph_pub_key_bytes_size];
+            to_verify = new unsigned char[encrypted_ms_size + eph_pub_key_bytes_size];
             ISNOT(to_verify,"allocating to_sign failed")
             //copy them into one buffer to be signed
-            memmove(to_verify,encrypted_k_as,encrypted_k_as_size);
+            memmove(to_verify,encrypted_master_secret,encrypted_ms_size);
             //move on pointer to put the rest
-            memmove(to_verify + encrypted_k_as_size ,eph_pub_key_bytes,eph_pub_key_bytes_size);
+            memmove(to_verify + encrypted_ms_size ,eph_pub_key_bytes,eph_pub_key_bytes_size);
             //bytes have been copied free memory
-            //free(encrypted_k_as);
+            //free(encrypted_master_secret);
             free(eph_pub_key_bytes);
             //verify client signature on ciphertext
             signature = message->getPayload()->getSignature();
             signature_size = message->getSignatureLen();
             client_pub_key = session->get_user(sender)->getPublicKey();
-            plain_size = encrypted_k_as_size + eph_pub_key_bytes_size;
+            plain_size = encrypted_ms_size + eph_pub_key_bytes_size;
             result = CryptoManager::verify_signature(signature,signature_size,to_verify, plain_size,
                                             client_pub_key);
-            cout << "verify client's signature " << result << endl;
-            //decrypt session key
-            CryptoManager::rsa_decrypt(encrypted_k_as,encrypted_k_as_size,&plaintext,
+            IF_MANAGER_FAILED(result,"verifying client signature failed",0)
+            //decrypt master secret  key
+            result = CryptoManager::rsa_decrypt(encrypted_master_secret,encrypted_ms_size,&plaintext,
                                        &plain_size,eph_keys.second);
-            for(int i=0; i < KEY_LENGTH; i++)
-                cout << (int) plaintext[i] << endl;
+            IF_MANAGER_FAILED(result,"decrypting master secret failed",0)
+            session_key = CryptoManager::compute_session_key(plaintext,plain_size);
+            IF_MANAGER_FAILED(result,"decrypting master secret failed",0)
+            session->get_user(sender)->setSessionKey(session_key);
+            //TODO: reply with user online list and clean up
+            /*for(int i=0; i < KEY_LENGTH; i++)
+                cout << (int) session_key[i] << endl;
+            */
             break;
         default:
             cerr << "wrong type!!" << endl;
