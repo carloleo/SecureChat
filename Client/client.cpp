@@ -46,8 +46,8 @@ int main(){
     cout << "authentication in progress..." << endl;
     //IDE does not allow to open promt
     string pwd;
-    cout << "pwd" << endl;
-    cin >> pwd;
+    //cout << "pwd" << endl;
+    //cin >> pwd;
     //X509* cert = Managers::CryptoManager::open_certificate((string) "../Server/Docs/SecureChat_cert.pem");
     //verify_cert(cert);
     //exit(0);
@@ -56,7 +56,7 @@ int main(){
     string filename = (string)  CERT_DIR + username + "_key.pem" ;
     file = fopen(filename.c_str(),"r");
     ISNOT(file,"opening client private key fail failed")
-    pvt_client_key = PEM_read_PrivateKey(file,NULL,NULL,(void*) pwd.c_str());
+    pvt_client_key = PEM_read_PrivateKey(file,NULL,NULL,NULL/*(void*) pwd.c_str()*/);
     fclose(file);
     ISNOT(pvt_client_key,"reading client pvt key failed")
     not_used = authenticate_to_server(server_socket,username);
@@ -83,16 +83,17 @@ int  verify_cert(X509* cert){
 int authenticate_to_server(int server_socket, string username){
     int result;
     Message *second_message;
-    Message* message = new Message();
-    message->setSender(username);
-    message->setType(AUTH_REQUEST);
+    Message* first_message;
+    NEW(first_message,new Message(),"first message")
+    first_message->setSender(username);
+    first_message->setType(AUTH_REQUEST);
     uint32_t nonce ;
     X509* server_cert = nullptr;
     CryptoManager::generate_nonce(&nonce);
-    message->getPayload()->setNonce(nonce);
+    first_message->getPayload()->setNonce(nonce);
     //1st handshake message
-    result = SocketManager::send_message(server_socket,message);
-    delete message;
+    result = SocketManager::send_message(server_socket,first_message);
+    delete first_message;
     if (result <= 0)
         return 0;
     //2nd handshake message
@@ -115,7 +116,8 @@ int authenticate_to_server(int server_socket, string username){
     IF_MANAGER_FAILED(result,"verifying ephemeral signed public key failed",0)
 
     //send third message
-    Message* third_message = new Message();
+    Message* third_message;
+    NEW(third_message,new Message(),"third message");
     result = prepare_third_message(eph_pub_key,third_message);
     IF_MANAGER_FAILED(result,"prepare third message failed",0)
     result = SocketManager::send_message(server_socket,third_message);
@@ -127,8 +129,7 @@ int prepare_third_message(EVP_PKEY* eph_pub_key,Message* msg){
     int result;
     //session key
     unsigned char* master_secret;
-    master_secret = new unsigned char[KEY_LENGTH];
-    ISNOT(master_secret,"k_as allocation failed")
+    NEW(master_secret,new unsigned char[KEY_LENGTH],"master_secret")
     result = CryptoManager::generate_random_bytes(master_secret,KEY_LENGTH);
     IF_MANAGER_FAILED(result,"generating session key failed",0)
     //encrypt session key by server ephemeral public key
@@ -143,8 +144,8 @@ int prepare_third_message(EVP_PKEY* eph_pub_key,Message* msg){
     result = CryptoManager::pkey_to_bytes(eph_pub_key,&eph_pub_key_bytes,&eph_pub_key_bytes_size);
     IF_MANAGER_FAILED(result,"pkey_to_bytes failed",0)
     //sign both of them
-    unsigned char* to_sign = new unsigned char[encrypted_ms_size + eph_pub_key_bytes_size];
-    ISNOT(to_sign,"allocating to_sign failed")
+    unsigned char* to_sign;
+    NEW(to_sign,new unsigned char[encrypted_ms_size + eph_pub_key_bytes_size],"to_sign")
     //copy them into one buffer to be signed
     memmove(to_sign, encrypted_master_secret, encrypted_ms_size);
     //move on pointer to put the rest
@@ -171,8 +172,8 @@ int prepare_third_message(EVP_PKEY* eph_pub_key,Message* msg){
     sever_session_key = CryptoManager::compute_session_key(master_secret,KEY_LENGTH);
     IF_MANAGER_FAILED(sever_session_key,"generating session key failed",0)
 
-    /*for(int i=0; i < KEY_LENGTH; i++)
-        cout << (int) session_key[i] << endl;*/
+    for(int i=0; i < KEY_LENGTH; i++)
+        cout << (int) sever_session_key[i] << endl;
     return 1;
 }
 /*EVP_PKEY* save_cert(X509* cert){

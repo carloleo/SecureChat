@@ -99,7 +99,8 @@ Session* configure_server(void){
     while(users_file.is_open() && getline(users_file,line)){
         usernames = parse_line(line);
         for(auto username : usernames) {
-            User* user = new User();
+            User* user;
+            NEW(user,new User(),"user")
             user->setUserName(username);
             EVP_PKEY* pub_key = read_public_key(username);
             user->setPublicKey(pub_key);
@@ -154,7 +155,7 @@ EVP_PKEY* read_public_key(string username){
 }
 int manage_message(int socket, Message* message){
     string sender = message->getSender();
-    Message *reply = new Message();
+    Message *reply;
     uint32_t signature_size =0;
     EVP_PKEY * eph_pubkey;
     EVP_PKEY * eph_pvtkey;
@@ -171,6 +172,7 @@ int manage_message(int socket, Message* message){
     unsigned char* plaintext;
     size_t plain_size;
     EVP_PKEY* client_pub_key;
+    NEW(reply,new Message(),"reply")
     switch (message->getType()) {
         case AUTH_REQUEST:
             if(!session->is_registered(sender)){
@@ -184,7 +186,11 @@ int manage_message(int socket, Message* message){
             }
 
             eph_pubkey = EVP_PKEY_new();
+            if(!eph_pubkey)
+                return 0;
             eph_pvtkey = EVP_PKEY_new();
+            if(!eph_pvtkey)
+                return 0;
             result = CryptoManager::generate_ephemeral_rsa(&eph_pubkey,&eph_pvtkey);
             if(result){
                 signature = CryptoManager::sign_pubKey(eph_pubkey,session->getServerPvtKey(),
@@ -223,8 +229,7 @@ int manage_message(int socket, Message* message){
             uint32_t eph_pub_key_bytes_size;
             result = CryptoManager::pkey_to_bytes(eph_keys.first,&eph_pub_key_bytes,&eph_pub_key_bytes_size);
             IF_MANAGER_FAILED(result,"obtaining pkey_to_bytes failed",0)
-            to_verify = new unsigned char[encrypted_ms_size + eph_pub_key_bytes_size];
-            ISNOT(to_verify,"allocating to_sign failed")
+            NEW(to_verify,new unsigned char[encrypted_ms_size + eph_pub_key_bytes_size],"to_verify")
             //copy them into one buffer to be signed
             memmove(to_verify,encrypted_master_secret,encrypted_ms_size);
             //move on pointer to put the rest
@@ -248,9 +253,9 @@ int manage_message(int socket, Message* message){
             IF_MANAGER_FAILED(result,"decrypting master secret failed",0)
             session->get_user(sender)->setSessionKey(session_key);
             //TODO: reply with user online list and clean up
-            /*for(int i=0; i < KEY_LENGTH; i++)
+            for(int i=0; i < KEY_LENGTH; i++)
                 cout << (int) session_key[i] << endl;
-            */
+
             break;
         default:
             cerr << "wrong type!!" << endl;

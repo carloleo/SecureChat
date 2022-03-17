@@ -25,6 +25,14 @@
               cerr << message << endl;             \
               return error_value;  \
             }
+#define NEW(var,new_call,var_name) \
+            try{                      \
+                var = new_call;                          \
+            }catch(std::bad_alloc &e){    \
+                std::string msg = var_name + (std::string) "bad alloc";                  \
+                perror(msg.c_str());              \
+                exit(EXIT_FAILURE)  ;            \
+            }
 
 enum MESSAGE_TYPE{AUTH_REQUEST,AUTH_RESPONSE,AUTH_KEY_EXCHANGE,AUTH_KEY_EXCHANGE_RESPONSE,REQUEST_TO_TALK, REQUEST_OK,
         REQUEST_KO,DATA,ERROR};

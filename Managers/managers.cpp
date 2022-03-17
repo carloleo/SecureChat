@@ -129,8 +129,7 @@ int Managers::SocketManager::read_data(int socket,unsigned char** data, uint32_t
     int result;
     result = SocketManager::read_n(socket, sizeof(uint32_t),(void*)len);
     IF_IO_ERROR(result, 0)
-    *data = new unsigned char[*len];
-    ISNOT(data,"allocating dara buffer failed")
+    NEW(*data,new unsigned char[*len],"data")
     result = SocketManager::read_n(socket,*len,
                                    (void*) *data);
     return result;
@@ -143,7 +142,7 @@ int Managers::SocketManager::read_certificate(int socket, X509 **cert) {
     BIO* stream;
     result = SocketManager::read_n(socket,sizeof(long),(void*) &size);
     IF_IO_ERROR(result,result);
-    cert_buff = new unsigned char[size];
+    NEW(cert_buff,new unsigned char[size],"cert_buff")
     result = SocketManager::read_n(socket,size,(void*) cert_buff);
     IF_IO_ERROR(result,result);
     stream = BIO_new(BIO_s_mem());
@@ -164,7 +163,7 @@ int Managers::SocketManager::read_public_key(int socket, EVP_PKEY **pubkey) {
     BIO* stream;
     result = SocketManager::read_n(socket,sizeof(long),(void*) &size);
     IF_IO_ERROR(result,result);
-    pub_key_buff = new unsigned char[size];
+    NEW(pub_key_buff,new unsigned char[size],"pub_key_buff")
     result = SocketManager::read_n(socket,size,(void*) pub_key_buff);
     IF_IO_ERROR(result,result);
     stream = BIO_new(BIO_s_mem());
@@ -182,7 +181,8 @@ int Managers::SocketManager::read_string(int socket, std::string &str) {
     result = SocketManager::read_n(socket,sizeof(size_t),(void*) &size);
     if(result <= 0)
         return result;
-    char* data = new char[size+1];
+    char* data;
+    NEW(data,new char[size+1],"data string")
     result = SocketManager::read_n(socket,size,(void*) data);
     if(result){
         data[size] = '\0';
@@ -270,8 +270,7 @@ Message* Managers::SocketManager::read_message(int socket){
             result = SocketManager::read_n(socket,sizeof(uint32_t),(void*)&nonce);
             //cout << nonce << endl;
             if(result){
-                msg = new Message();
-                ISNOT(msg,"allocating message failed")
+                NEW(msg,new Message(),"msg read_message")
                 msg->setType(AUTH_REQUEST);
                 msg->setSender(username);
                 msg->getPayload()->setNonce(nonce);
@@ -287,7 +286,7 @@ Message* Managers::SocketManager::read_message(int socket){
             //read certificate
             result = SocketManager::read_certificate(socket,&cert);
             IF_IO_ERROR(result, nullptr)
-            msg = new Message();
+            NEW(msg,new Message(),"msg read_message")
             msg->setType(AUTH_RESPONSE);
             msg->setSignatureLen(signature_len);
             msg->getPayload()->setSignature(signature);
@@ -304,7 +303,7 @@ Message* Managers::SocketManager::read_message(int socket){
             //read encrypted session key
             result = SocketManager::read_data(socket,&ciphertext,&ciphertext_len);
             IF_IO_ERROR(result, nullptr);
-            msg = new Message();
+            NEW(msg,new Message(),"msg read_message")
             msg->setType(AUTH_KEY_EXCHANGE);
             msg->setSender(username);
             msg->setSignatureLen(signature_len);
@@ -317,8 +316,7 @@ Message* Managers::SocketManager::read_message(int socket){
         case ERROR:
             result = SocketManager::read_string(socket, error_message);
             if(result){
-                msg = new Message();
-                ISNOT(msg,"allocating message failed")
+                NEW(msg,new Message(),"msg read_message")
                 msg->setType(ERROR);
                 msg->getPayload()->setErrorMessage(error_message);
             }
@@ -429,8 +427,7 @@ unsigned char* Managers::CryptoManager::sign(unsigned char *plaintext, uint64_t 
     OPENSSL_FAIL(not_used,"initializing signature context failed", nullptr)
     not_used = EVP_SignUpdate(md_ctx, plaintext, plain_size);
     OPENSSL_FAIL(not_used,"computing signature failed", nullptr)
-    sgnt_buff = new unsigned char [EVP_PKEY_size(sign_key)];
-    ISNOT(sgnt_buff,"allocating signature buffer failed")
+    NEW(sgnt_buff,new unsigned char [EVP_PKEY_size(sign_key)],"sgnt_buff")
     //finalize signature
     not_used = EVP_SignFinal(md_ctx, sgnt_buff, sgnt_size, sign_key);
     OPENSSL_FAIL(not_used,"finalizing signature failed", nullptr)
@@ -536,7 +533,8 @@ int Managers::CryptoManager::generate_random_bytes(unsigned char* bytes,int amou
 
 int Managers::CryptoManager::generate_nonce(uint32_t *nonce) {
     int result;
-    unsigned char* bytes = new unsigned char[4];
+    unsigned char* bytes;
+    NEW(bytes, new unsigned char[4],"bytes nonce")
     result = CryptoManager::generate_random_bytes(bytes,4);
     if(result)
         *nonce = (uint32_t )((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]);
@@ -579,10 +577,8 @@ int Managers::CryptoManager::generate_ephemeral_rsa(EVP_PKEY** pub_key, EVP_PKEY
     //get keys size
     auto size_public_key = BIO_pending(pub_key_stream);
     auto size_private_key = BIO_pending(pvt_key_stream);
-    pub_key_bytes = new char[size_public_key];
-    ISNOT(pub_key_bytes,"allocating char buffer pub_key_byte failed")
-    pvt_key_bytes = new char[size_private_key];
-    ISNOT(pvt_key_bytes,"allocating char buffer pub_key_byte failed")
+    NEW(pub_key_bytes,new char[size_public_key], "pub_key_bytes")
+    NEW(pvt_key_bytes,new char[size_private_key], "pub_key_bytes")
     //put keys form bio streams into char buffers
     not_used = BIO_read(pub_key_stream, pub_key_bytes, size_public_key);
     OPENSSL_FAIL(not_used,"moving public key from bio stream failed",0)
@@ -629,8 +625,8 @@ unsigned char* Managers::CryptoManager::sign_pubKey(EVP_PKEY *pubkey,EVP_PKEY *p
     not_used = BIO_write(stream,(void*) &nonce,sizeof(uint32_t));
     OPENSSL_FAIL(not_used,"writing nonce on bio stream failed", nullptr);
     int plain_size = BIO_pending(stream);
-    unsigned char* plain_text = new unsigned char[plain_size];
-    ISNOT(plain_text,"allocating plaintext buffer failed")
+    unsigned char* plain_text;
+    NEW(plain_text,new unsigned char[plain_size],"plain_text")
     not_used = BIO_read(stream,(void*) plain_text,plain_size);
     OPENSSL_FAIL(not_used,"reading from bio stream failed", nullptr);
     signature = CryptoManager::sign(plain_text,plain_size,pvtkey,signature_size);
@@ -649,8 +645,8 @@ int Managers::CryptoManager::verify_signed_pubKey(EVP_PKEY *pubkey_signed, uint3
     not_used = BIO_write(stream,(void*) &nonce,sizeof(uint32_t));
     OPENSSL_FAIL(not_used,"writing nonce on bio stream failed", 0);
     int plain_size = BIO_pending(stream);
-    unsigned char* plain_text = new unsigned char[plain_size];
-    ISNOT(plain_text,"allocating plaintext buffer failed")
+    unsigned char* plain_text;
+    NEW(plain_text,new unsigned char[plain_size],"plain_text")
     not_used = BIO_read(stream,(void*) plain_text,plain_size);
     OPENSSL_FAIL(not_used,"reading from bio stream failed", 0);
     not_used = CryptoManager::verify_signature(signature,signature_size,plain_text,plain_size,pubkey);
@@ -660,8 +656,7 @@ unsigned char* Managers::CryptoManager::compute_hash(unsigned char *bytes,size_t
     unsigned char* digest;
     EVP_MD_CTX* ctx;
     int not_used;
-    digest = new unsigned char[EVP_MD_size(DIGEST)];
-    ISNOT(digest,"allocating session key buffer failed")
+    NEW(digest,new unsigned char[EVP_MD_size(DIGEST)],"digest compute hash")
     ctx = EVP_MD_CTX_new();
     OPENSSL_FAIL(ctx,"allocating digest ctx failed", nullptr)
     not_used = EVP_DigestInit(ctx, DIGEST);
@@ -680,8 +675,7 @@ unsigned char* Managers::CryptoManager::compute_session_key(unsigned char *maste
     uint32_t digest_len = 0;
     digest = CryptoManager::compute_hash(master_secret,ms_size,&digest_len);
     OPENSSL_FAIL(digest,"computing digest failed", nullptr)
-    session_key = new unsigned char[KEY_LENGTH];
-    ISNOT(session_key,"allocating session key failed")
+    NEW(session_key,new unsigned char[KEY_LENGTH],"session_key compute")
     memmove(session_key,digest,KEY_LENGTH);
     free(digest);
     return session_key;
@@ -712,8 +706,7 @@ int Managers::CryptoManager::rsa_encrypt(unsigned char** ciphertext, size_t* cip
      */
     RSA* r = EVP_PKEY_get0_RSA(pub_key);
     OPENSSL_FAIL(r,"EVP_PKEY_get0_RSA",0);
-    *ciphertext = new unsigned char[RSA_size(r)];
-    ISNOT(ciphertext,"allocating buffer during rsa encryption failed")
+    NEW(*ciphertext,new unsigned char[RSA_size(r)],"ciphertext")
     not_used = RSA_public_encrypt(plain_size,plaintext,*ciphertext,r,RSA_PKCS1_PADDING);
     if(not_used < 0){
         CryptoManager::manage_error("RSA_public_encrypt");
@@ -766,8 +759,7 @@ int Managers::CryptoManager::rsa_decrypt(unsigned char *ciphertext, size_t ciphe
      */
     RSA* r = EVP_PKEY_get0_RSA(pvt_key);
     OPENSSL_FAIL(r,"EVP_PKEY_get0_RSA",0);
-    *plaintext = new unsigned char[RSA_size(r)];
-    ISNOT(*plaintext,"allocating buffer during rsa encryption failed")
+    NEW(*plaintext,new unsigned char[RSA_size(r)],"plaintext")
     not_used = RSA_private_decrypt(ciphertext_len,ciphertext,*plaintext,r,RSA_PKCS1_PADDING);
     if(not_used < 0){
         CryptoManager::manage_error("RSA_private_decrypt");
@@ -786,8 +778,7 @@ int Managers::CryptoManager::pkey_to_bytes(EVP_PKEY *pkey, unsigned char **pkey_
     result = PEM_write_bio_PUBKEY(stream,pkey);
     OPENSSL_FAIL(result,"writing pubkey on bio stream failed", 0);
     long size = BIO_pending(stream);
-    *pkey_bytes = new unsigned char[size];
-    ISNOT(pkey_bytes,"allocating pkey_bytes failed")
+    NEW(*pkey_bytes,new unsigned char[size],"pkey_bytes")
     result =  BIO_read(stream,(void*) *pkey_bytes,size);
     OPENSSL_FAIL(result,"reading pkey_bytes failed",0)
     *bytes_size = size;

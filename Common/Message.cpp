@@ -41,8 +41,7 @@ Message::~Message() {
 }
 
 Message::Message() {
-    payload = new Payload();
-    ISNOT(payload,"allocating payload failed");
+    NEW(payload, new Payload(),"payload")
 }
 
 uint32_t Message::getTPkLen() const {
