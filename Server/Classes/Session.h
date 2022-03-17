@@ -6,6 +6,7 @@
 #define SECURECHAT_SESSION_H
 #include <map>
 #include <string>
+#include <vector>
 #include "User.h"
 using namespace std;
 class Session {
@@ -32,8 +33,9 @@ public:
 
     void setServerCert(X509 *serverCert);
 
+    string get_online_users();
+
     ~Session();
-    //TODO: build the users online list
 };
 
 

@@ -20,6 +20,7 @@ private:
     uint32_t signature_len;
     std::string sender;
     std::string recipient;
+    bool result;
     //payload
     Payload* payload;
 public:
@@ -47,6 +48,7 @@ public:
     uint32_t getSignatureLen() const;
 
 
+
     void setType(MESSAGE_TYPE type);
 
     void setSender(const std::string &sender);
@@ -64,6 +66,7 @@ public:
     void setSequenceN(uint32_t sequenceN);
 
     void setSignatureLen(uint32_t signatureLen);
+
 
     virtual ~Message();
 };

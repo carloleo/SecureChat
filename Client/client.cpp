@@ -14,6 +14,10 @@ int authenticate_to_server(int server_socket,string username);
 int verify_cert(X509*);
 EVP_PKEY* save_cert(X509* cert);
 int prepare_third_message(EVP_PKEY*,Message*);
+//receive it to server
+uint32_t server_in_sn = 0;
+//send it to server
+uint32_t server_out_sn = 0;
 
 //global
 EVP_PKEY *pvt_client_key = nullptr;
@@ -67,6 +71,7 @@ int main(){
     }
 
 
+
     close(server_socket);
     return  0;
 }
@@ -114,14 +119,25 @@ int authenticate_to_server(int server_socket, string username){
     result = CryptoManager::verify_signed_pubKey(eph_pub_key,nonce,server_pub_key,signature,
                                                  signature_length);
     IF_MANAGER_FAILED(result,"verifying ephemeral signed public key failed",0)
-
+    delete second_message;
     //send third message
     Message* third_message;
     NEW(third_message,new Message(),"third message");
     result = prepare_third_message(eph_pub_key,third_message);
     IF_MANAGER_FAILED(result,"prepare third message failed",0)
     result = SocketManager::send_message(server_socket,third_message);
-    //TODO read confirmation message and clean up
+    IF_MANAGER_FAILED(result,"sending third message failed",0)
+    Message* data = SocketManager::read_message(server_socket);
+    unsigned char* iv = CryptoManager::generate_iv(server_in_sn);
+    unsigned char* plaintext = nullptr;
+    unsigned char* add = uint32_to_bytes(server_in_sn);
+    NEW(plaintext,new unsigned  char [data->getCTxtLen()],"plaintext")
+    result= CryptoManager::gcm_decrypt(data->getPayload()->getCiphertext(),data->getCTxtLen(),
+                               add,4,data->getPayload()->getAuthTag(),
+                               sever_session_key,iv,EVP_CIPHER_iv_length(CIPHER),plaintext);
+    cout<<"PT:"<<endl;
+    BIO_dump_fp (stdout, (const char *)plaintext, data->getCTxtLen());
+    //TODO: refactor and clean up
     return result;
 
 }

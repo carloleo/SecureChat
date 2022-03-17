@@ -172,6 +172,13 @@ int manage_message(int socket, Message* message){
     unsigned char* plaintext;
     size_t plain_size;
     EVP_PKEY* client_pub_key;
+    unsigned char* aad ;
+    unsigned char* ciphertext;
+    unsigned char* auth_tag;
+    unsigned char* iv ;
+    uint32_t server_sn = 0;
+    string online_users;
+    int cipher_len = 0;
     NEW(reply,new Message(),"reply")
     switch (message->getType()) {
         case AUTH_REQUEST:
@@ -251,10 +258,34 @@ int manage_message(int socket, Message* message){
             IF_MANAGER_FAILED(result,"decrypting master secret failed",0)
             session_key = CryptoManager::compute_session_key(plaintext,plain_size);
             IF_MANAGER_FAILED(result,"decrypting master secret failed",0)
+            //set user's session key
             session->get_user(sender)->setSessionKey(session_key);
             //TODO: reply with user online list and clean up
+            //set the sender online
+            session->get_user(sender)->setIsOnline(true);
+            online_users = session->get_online_users();
+            session->get_user(sender)->setSnServer(0);
+            session->get_user(sender)->setSnUser(0);
+
+            aad = uint32_to_bytes(server_sn);
+            iv = CryptoManager::generate_iv(server_sn);
+            NEW(auth_tag,new unsigned  char [TAG_LEN],"auth_tag")
+            NEW(ciphertext, new unsigned  char[online_users.length()],"ciphertext")
+            cipher_len = CryptoManager::gcm_encrypt((unsigned char*)online_users.c_str(),online_users.length(),aad,4,session_key,
+                                                iv,4,ciphertext,auth_tag);
+            IF_MANAGER_FAILED(result,"encrypting last handshake message failed",0)
+            reply->setType(AUTH_KEY_EXCHANGE_RESPONSE);
+            reply->setSequenceN(server_sn);
+            reply->setCTxtLen(cipher_len);
+            reply->getPayload()->setCiphertext(ciphertext);
+            reply->getPayload()->setAuthTag(auth_tag);
+            result = SocketManager::send_message(socket,reply);
+            IF_MANAGER_FAILED(result,"sending last handshake message failed",0)
+            delete reply;
+            //TODO: refactor and clean up
+            /*
             for(int i=0; i < KEY_LENGTH; i++)
-                cout << (int) session_key[i] << endl;
+                cout << (int) session_key[i] << endl;*/
 
             break;
         default:

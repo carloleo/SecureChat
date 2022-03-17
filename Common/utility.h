@@ -36,4 +36,14 @@
 
 enum MESSAGE_TYPE{AUTH_REQUEST,AUTH_RESPONSE,AUTH_KEY_EXCHANGE,AUTH_KEY_EXCHANGE_RESPONSE,REQUEST_TO_TALK, REQUEST_OK,
         REQUEST_KO,DATA,ERROR};
+static inline unsigned char* uint32_to_bytes(uint32_t num){
+    unsigned char* bytes;
+    NEW(bytes,new unsigned char[4],"bytes")
+    int n = 24;
+    for(int i = 0; i < 4 ; i++){
+        bytes[i] = num >> n;
+        n -= 8;
+    }
+    return bytes;
+}
 #endif //SECURECHAT_UTILITY_H

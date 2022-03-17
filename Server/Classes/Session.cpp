@@ -66,3 +66,15 @@ void Session::setServerCert(X509 *serverCert) {
 bool Session::is_in_handshake(std::string username) {
     return ephemeral_keys.find(username) != ephemeral_keys.end();
 }
+
+std::string Session::get_online_users() {
+    string users_online;
+    string username;
+    auto usr = users.begin();
+    while(usr != users.end()){
+        username = usr->second->getUserName();
+        users_online.append(username + " ");
+        usr++;
+    }
+    return users_online;
+}

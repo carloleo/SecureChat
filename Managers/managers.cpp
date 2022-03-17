@@ -18,10 +18,6 @@
 #include <limits>
 #include <cstring>
 
-#define CIPHER  EVP_aes_128_gcm()
-#define DIGEST EVP_sha256()
-#define RSA_SIZE 2048
-#define TAG_LEN 16
 #define OPENSSL_FAIL(result,message,error_value) \
        if(!result){               \
             Managers::CryptoManager::manage_error(message);                         \
@@ -232,6 +228,13 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
             IF_IO_ERROR(result,result);
             break;
         case AUTH_KEY_EXCHANGE_RESPONSE:
+            //send encrypted online users list
+            len = msg->getCTxtLen();
+            result = SocketManager::send_data(socket,msg->getPayload()->getCiphertext(),len);
+            IF_IO_ERROR(result,result);
+            //send authentication tag
+            result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
+            IF_IO_ERROR(result,result);
             break;
         case ERROR:
             result = SocketManager::write_string(socket,msg->getPayload()->getErrorMessage());
@@ -312,6 +315,19 @@ Message* Managers::SocketManager::read_message(int socket){
             msg->getPayload()->setCiphertext(ciphertext);
             break;
         case AUTH_KEY_EXCHANGE_RESPONSE:
+            //read encrypted online users list
+            result = SocketManager::read_data(socket,&ciphertext,&ciphertext_len);
+            IF_IO_ERROR(result, nullptr);
+            //send authentication tag
+            unsigned char* auth_tag;
+            NEW(auth_tag,new unsigned char[TAG_LEN],"auth tag")
+            result = SocketManager::read_n(socket,TAG_LEN,(void*)auth_tag);
+            IF_IO_ERROR(result, nullptr);
+            NEW(msg,new Message(),"msg read_message")
+            msg->setType(AUTH_KEY_EXCHANGE_RESPONSE);
+            msg->setCTxtLen(ciphertext_len);
+            msg->getPayload()->setCiphertext(ciphertext);
+            msg->getPayload()->setAuthTag(auth_tag);
             break;
         case ERROR:
             result = SocketManager::read_string(socket, error_message);
@@ -358,7 +374,6 @@ int Managers::CryptoManager::gcm_encrypt(unsigned char *plaintext, int plaintext
     OPENSSL_FAIL(not_used,"finalizing encryption fail",0)
     //increase the ciphertext length
     ciphertext_len += len;
-
     //getting the tag
     not_used = EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, TAG_LEN, tag);
     OPENSSL_FAIL(not_used,"getting authentication tag failed",0)
@@ -784,4 +799,19 @@ int Managers::CryptoManager::pkey_to_bytes(EVP_PKEY *pkey, unsigned char **pkey_
     *bytes_size = size;
     BIO_free(stream);
     return 1;
+}
+
+unsigned char* Managers::CryptoManager::generate_iv(uint32_t sequence_number) {
+    unsigned char* iv;
+    size_t len = EVP_CIPHER_iv_length(CIPHER);
+    NEW(iv,new unsigned char[len],"iv")
+    unsigned char* bytes = uint32_to_bytes(sequence_number);
+    int b = 24;
+    iv[0] = bytes[0];
+    iv[1] = bytes[1];
+    iv[2] = bytes[2];
+    iv[3] = bytes[3];
+    for(int i = 4; i < len; i++)
+        iv[i] = (unsigned char)i;
+    return iv;
 }

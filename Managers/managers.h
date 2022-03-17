@@ -8,6 +8,10 @@
 #include "../Common/Message.h"
 #include <openssl/evp.h>
 #include <cstddef>
+#define CIPHER  EVP_aes_128_gcm()
+#define DIGEST EVP_sha256()
+#define RSA_SIZE 2048
+#define TAG_LEN 16
 namespace Managers {
     namespace SocketManager {
         int write_n(int socket, size_t amount, void* buff);
@@ -58,6 +62,7 @@ namespace Managers {
         int rsa_decrypt(unsigned char* ciphertext, size_t ciphertext_len, unsigned char** plaintext,
                         size_t* plain_size,EVP_PKEY* pvt_key);
         int pkey_to_bytes(EVP_PKEY* pkey,unsigned char** pkey_bytes, uint32_t* bytes_size);
+        unsigned char* generate_iv(uint32_t sequence_number);
     }
 }
 
