@@ -6,6 +6,7 @@
 #define SECURE_CHAT_UTILITY_H
 #include <cerrno>
 #include <string>
+#include <cstring>
 #define  SERVER_PORT 8888
 #define  MAX_CHARS (size_t) 10000
 #define KEY_LENGTH 16
@@ -29,8 +30,8 @@
             try{                      \
                 var = new_call;                          \
             }catch(std::bad_alloc &e){    \
-                std::string msg = var_name + (std::string) "bad alloc";                  \
-                perror(msg.c_str());              \
+                std::string err_msg = var_name + (std::string) "bad alloc";                  \
+                perror(err_msg.c_str());              \
                 exit(EXIT_FAILURE)  ;            \
             }
 
@@ -45,5 +46,11 @@ static inline unsigned char* uint32_to_bytes(uint32_t num){
         n -= 8;
     }
     return bytes;
+}
+static inline void destroy_secret(void* ptr, size_t size){
+#pragma optimize("", off)
+    memset(ptr, 0, size);
+#pragma optmize("", on)
+    free(ptr);
 }
 #endif //SECURECHAT_UTILITY_H

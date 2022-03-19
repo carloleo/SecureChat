@@ -17,6 +17,8 @@ class Payload {
     EVP_PKEY* t_pub_key; //ephemeral public key
     X509* cert; //certificate
 public:
+    Payload();
+
     unsigned char *getSignature() const;
 
     unsigned char *getCiphertext() const;

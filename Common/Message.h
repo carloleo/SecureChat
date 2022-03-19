@@ -7,6 +7,7 @@
 #include "utility.h"
 #include "Payload.h"
 #include <string>
+#include <cstring>
 
 
 class Message {

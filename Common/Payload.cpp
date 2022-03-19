@@ -59,8 +59,7 @@ Payload::~Payload() {
         free(ciphertext);
     if(auth_tag)
         free(auth_tag);
-    if(cert)
-        free(cert);
+    EVP_PKEY_free(t_pub_key);
 
 }
 
@@ -70,4 +69,12 @@ const std::string &Payload::getErrorMessage() const {
 
 void Payload::setErrorMessage(const std::string &errorMessage) {
     error_message = errorMessage;
+}
+
+Payload::Payload() {
+    signature = nullptr;
+    ciphertext = nullptr;
+    auth_tag = nullptr;
+    t_pub_key = nullptr; //ephemeral public key
+    cert = nullptr; //certificate
 }
