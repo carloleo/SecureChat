@@ -102,6 +102,7 @@ Session* configure_server(void){
             User* user;
             NEW(user,new User(),"user")
             user->setUserName(username);
+            user->setIsOnline(true);
             EVP_PKEY* pub_key = read_public_key(username);
             user->setPublicKey(pub_key);
             session->add_user(user);
@@ -154,7 +155,8 @@ EVP_PKEY* read_public_key(string username){
     return public_key;
 }
 int manage_message(int socket, Message* message){
-    string sender = message->getSender();
+    string username_sender = message->getSender();
+    User* sender;
     Message *reply;
     uint32_t signature_size =0;
     EVP_PKEY * eph_pubkey;
@@ -182,13 +184,11 @@ int manage_message(int socket, Message* message){
     NEW(reply,new Message(),"reply")
     switch (message->getType()) {
         case AUTH_REQUEST:
-            if(!session->is_registered(sender)){
-                delete message;
+            if(!session->is_registered(username_sender)){
                 cerr << "WRONG USERNAME" << endl;
                 reply->setType(ERROR);
                 reply->getPayload()->setErrorMessage((string)"Invalid username");
                 SocketManager::send_message(socket,reply);
-                delete reply;
                 break; //returns invalid username
             }
 
@@ -214,7 +214,7 @@ int manage_message(int socket, Message* message){
                         ephemeral_pair.first = eph_pubkey;
                         ephemeral_pair.second = eph_pvtkey;
                         //save ephemeral keys to complete the handshake
-                        session->add_ephemeral_keys(sender,ephemeral_pair);
+                        session->add_ephemeral_keys(username_sender,ephemeral_pair);
                     }
                 }
 
@@ -247,7 +247,7 @@ int manage_message(int socket, Message* message){
             //verify client signature on ciphertext
             signature = message->getPayload()->getSignature();
             signature_size = message->getSignatureLen();
-            client_pub_key = session->get_user(sender)->getPublicKey();
+            client_pub_key = session->get_user(username_sender)->getPublicKey();
             plain_size = encrypted_ms_size + eph_pub_key_bytes_size;
             result = CryptoManager::verify_signature(signature,signature_size,to_verify, plain_size,
                                             client_pub_key);
@@ -255,43 +255,54 @@ int manage_message(int socket, Message* message){
             //decrypt master secret  key
             result = CryptoManager::rsa_decrypt(encrypted_master_secret,encrypted_ms_size,&plaintext,
                                        &plain_size,eph_keys.second);
+            //free ephemeral keys
+            session->destroy_ephemeral_keys(username_sender);
             IF_MANAGER_FAILED(result,"decrypting master secret failed",0)
             session_key = CryptoManager::compute_session_key(plaintext,plain_size);
             IF_MANAGER_FAILED(result,"decrypting master secret failed",0)
             //set user's session key
-            session->get_user(sender)->setSessionKey(session_key);
-            //TODO: reply with user online list and clean up
-            //set the sender online
-            session->get_user(sender)->setIsOnline(true);
+            sender = session->get_user(username_sender);
+            sender->setSessionKey(session_key);
+            //initializing sender communication state
+            sender->setIsOnline(true);
+            sender->setSnServer(0);
+            sender->setSnUser(0);
+            sender->setSocket(socket);
+            //retrieve online users
             online_users = session->get_online_users();
-            session->get_user(sender)->setSnServer(0);
-            session->get_user(sender)->setSnUser(0);
-
+            //encrypt message
+            server_sn =  sender->getSnServer();
             aad = uint32_to_bytes(server_sn);
             iv = CryptoManager::generate_iv(server_sn);
             NEW(auth_tag,new unsigned  char [TAG_LEN],"auth_tag")
             NEW(ciphertext, new unsigned  char[online_users.length()],"ciphertext")
-            cipher_len = CryptoManager::gcm_encrypt((unsigned char*)online_users.c_str(),online_users.length(),aad,4,session_key,
+            plain_size = online_users.length();
+            cipher_len = CryptoManager::gcm_encrypt((unsigned char*)online_users.c_str(),plain_size,
+                                                    aad,4,session_key,
                                                 iv,4,ciphertext,auth_tag);
+            free(iv);
             IF_MANAGER_FAILED(result,"encrypting last handshake message failed",0)
+            //prepare message
             reply->setType(AUTH_KEY_EXCHANGE_RESPONSE);
             reply->setSequenceN(server_sn);
             reply->setCTxtLen(cipher_len);
             reply->getPayload()->setCiphertext(ciphertext);
             reply->getPayload()->setAuthTag(auth_tag);
+            //send message
             result = SocketManager::send_message(socket,reply);
             IF_MANAGER_FAILED(result,"sending last handshake message failed",0)
+            sender->setSnServer(server_sn + 1);
             delete reply;
-            //TODO: refactor and clean up
-            /*
-            for(int i=0; i < KEY_LENGTH; i++)
-                cout << (int) session_key[i] << endl;*/
-
+            free(aad);
+            free(to_verify);
+            free(plaintext);
             break;
         default:
             cerr << "wrong type!!" << endl;
 
     }
+    //clean messages
+    delete message;
     return result;
 }
 
@@ -299,8 +310,8 @@ void disconnect_client(int socket,fd_set* client_set,int* fd_num){
     FD_CLR(socket,client_set);
     *fd_num = update_max(*client_set,*fd_num);
     ISLESSTHANZERO(*fd_num,"update_max failed")
+    session->disconnect_client(socket);
     close(socket);
-    //TODO: put user offline
     cout << "Client done!!" << endl;
 }
 

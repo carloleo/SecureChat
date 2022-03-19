@@ -43,6 +43,33 @@ bool Session::is_registered(std::string username){
 void Session::add_ephemeral_keys(string username,pair<EVP_PKEY*,EVP_PKEY*> eph_keys){
     ephemeral_keys[username] = eph_keys;
 }
+
+void Session::disconnect_client(int socket) {
+    auto usr = users.begin();
+    bool done = false;
+    while (usr != users.end() && !done) {
+        if (socket == usr->second->getSocket()) {
+            usr->second->setIsOnline(false);
+            string username = usr->second->getUserName();
+            //ephemeral keys
+            destroy_ephemeral_keys(username);
+            done = true;
+        }
+        usr++;
+    }
+}
+
+void Session::destroy_ephemeral_keys(std::string username){
+    //if there are phemeral keys
+    if(ephemeral_keys.find(username) != ephemeral_keys.end()){
+        //free ephemeral key
+        pair<EVP_PKEY*,EVP_PKEY*> tmp_keys = ephemeral_keys.find(username)->second;
+        EVP_PKEY_free(tmp_keys.first);
+        EVP_PKEY_free(tmp_keys.second);
+        ephemeral_keys.erase(username);
+    }
+}
+
 pair<EVP_PKEY*,EVP_PKEY*> Session::get_ephemeral_keys(std::string username){
     return ephemeral_keys.at(username);
 }

@@ -11,7 +11,7 @@
 class User {
 private:
     std::string user_name;
-    unsigned char* session_key;
+    unsigned char* session_key = nullptr;
     bool is_online;
     int socket;
     EVP_PKEY* public_key;
