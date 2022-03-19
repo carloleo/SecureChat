@@ -243,7 +243,7 @@ int manage_message(int socket, Message* message){
             memmove(to_verify + encrypted_ms_size ,eph_pub_key_bytes,eph_pub_key_bytes_size);
             //bytes have been copied free memory
             //free(encrypted_master_secret);
-            free(eph_pub_key_bytes);
+            delete eph_pub_key_bytes;
             //verify client signature on ciphertext
             signature = message->getPayload()->getSignature();
             signature_size = message->getSignatureLen();
@@ -283,7 +283,7 @@ int manage_message(int socket, Message* message){
             cipher_len = CryptoManager::gcm_encrypt((unsigned char*)online_users.c_str(),plain_size,
                                                     aad,4,session_key,
                                                 iv,4,ciphertext,auth_tag);
-            free(iv);
+            delete iv;
             IF_MANAGER_FAILED(result,"encrypting last handshake message failed",0)
             //prepare message
             reply->setType(AUTH_KEY_EXCHANGE_RESPONSE);
@@ -296,8 +296,8 @@ int manage_message(int socket, Message* message){
             IF_MANAGER_FAILED(result,"sending last handshake message failed",0)
             sender->setSnServer(server_sn + 1);
             delete reply;
-            free(aad);
-            free(to_verify);
+            delete aad;
+            delete to_verify;
             break;
         default:
             cerr << "wrong type!!" << endl;

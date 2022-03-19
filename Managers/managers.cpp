@@ -147,6 +147,7 @@ int Managers::SocketManager::read_certificate(int socket, X509 **cert) {
     OPENSSL_FAIL(stream,"writing certificate to bio stream failed",0)
     *cert = PEM_read_bio_X509(stream, NULL,NULL,NULL);
     BIO_free(stream);
+    delete cert_buff;
     return *cert != NULL ? 1 : 0;
 
 
@@ -168,6 +169,7 @@ int Managers::SocketManager::read_public_key(int socket, EVP_PKEY **pubkey) {
     OPENSSL_FAIL(stream,"writing pub key to bio stream failed",0)
     *pubkey = PEM_read_bio_PUBKEY(stream, NULL,NULL,NULL);
     BIO_free(stream);
+    delete pub_key_buff;
     return *pubkey != NULL ? 1 : 0;
 
 }
@@ -184,7 +186,7 @@ int Managers::SocketManager::read_string(int socket, std::string &str) {
         data[size] = '\0';
         str.append(data);
     }
-    free(data);
+    delete data;
     return result;
 
 }
@@ -245,7 +247,6 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
     return result;
 }
 Message* Managers::SocketManager::read_message(int socket){
-    //BIO* m_bio = BIO_new(BIO_s_mem());
     int result;
     Message* msg = nullptr;
     int tmp;
@@ -340,7 +341,7 @@ Message* Managers::SocketManager::read_message(int socket){
         default:
             break;
     }
-    //BIO_free(m_bio);
+
     return msg;
 }
 int Managers::CryptoManager::gcm_encrypt(unsigned char *plaintext, int plaintext_len,
@@ -393,7 +394,7 @@ int Managers::CryptoManager::gcm_decrypt(unsigned char *ciphertext, int cipherte
     /* Create and initialise the context */
     ctx = EVP_CIPHER_CTX_new();
     OPENSSL_FAIL(ctx,"allocation cipher context failed",0)
-    not_used = EVP_DecryptInit(ctx, EVP_aes_128_gcm(), key, iv);
+    not_used = EVP_DecryptInit(ctx, CIPHER, key, iv);
     OPENSSL_FAIL(not_used,"initializing cipher failed",0)
     //Provide any AAD data.
     not_used = EVP_DecryptUpdate(ctx, nullptr, &len, aad, aad_len);
@@ -413,7 +414,7 @@ int Managers::CryptoManager::gcm_decrypt(unsigned char *ciphertext, int cipherte
     // finalize decryption and compare authentication tags
     not_used = EVP_DecryptFinal(ctx, plaintext, &len);
     // cleaning up
-    EVP_CIPHER_CTX_cleanup(ctx);
+    EVP_CIPHER_CTX_free(ctx);
 
     if(not_used > 0) {
         /* Success */
@@ -552,7 +553,7 @@ int Managers::CryptoManager::generate_nonce(uint32_t *nonce) {
     result = CryptoManager::generate_random_bytes(bytes,4);
     if(result)
         *nonce = (uint32_t )((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]);
-    free(bytes);
+    delete bytes;
     return result;
 }
 
@@ -622,8 +623,8 @@ int Managers::CryptoManager::generate_ephemeral_rsa(EVP_PKEY** pub_key, EVP_PKEY
     BIO_free(pvt_key_stream);
     BIO_free_all(bio_buff_pub_key);
     BIO_free_all(bio_buff_pvt_key);
-    free(pub_key_bytes);
-    free(pvt_key_bytes);
+    delete pub_key_bytes;
+    delete pvt_key_bytes;
     //REMINDER: free both input keys
     return 1;
 }
@@ -646,7 +647,7 @@ unsigned char* Managers::CryptoManager::sign_pubKey(EVP_PKEY *pubkey,EVP_PKEY *p
     signature = CryptoManager::sign(plain_text,plain_size,pvtkey,signature_size);
     //cleaning up
     BIO_free(stream);
-    free(plain_text);
+    delete plain_text;
     return signature;
 }
 int Managers::CryptoManager::verify_signed_pubKey(EVP_PKEY *pubkey_signed, uint32_t nonce, EVP_PKEY *pubkey,
@@ -664,6 +665,8 @@ int Managers::CryptoManager::verify_signed_pubKey(EVP_PKEY *pubkey_signed, uint3
     not_used = BIO_read(stream,(void*) plain_text,plain_size);
     OPENSSL_FAIL(not_used,"reading from bio stream failed", 0);
     not_used = CryptoManager::verify_signature(signature,signature_size,plain_text,plain_size,pubkey);
+    BIO_free(stream);
+    delete plain_text;
     return not_used;
 }
 unsigned char* Managers::CryptoManager::compute_hash(unsigned char *bytes,size_t size,uint32_t * digest_len) {
@@ -691,7 +694,7 @@ unsigned char* Managers::CryptoManager::compute_session_key(unsigned char *maste
     OPENSSL_FAIL(digest,"computing digest failed", nullptr)
     NEW(session_key,new unsigned char[KEY_LENGTH],"session_key compute")
     memmove(session_key,digest,KEY_LENGTH);
-    free(digest);
+    delete digest;
     return session_key;
 }
 //do not allocate ciphertext buffer
@@ -812,6 +815,6 @@ unsigned char* Managers::CryptoManager::generate_iv(uint32_t sequence_number) {
     iv[3] = bytes[3];
     for(int i = 4; i < len; i++)
         iv[i] = (unsigned char)i;
-    free(bytes);
+    delete bytes;
     return iv;
 }

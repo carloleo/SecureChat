@@ -53,9 +53,6 @@ int main(){
     string pwd;
     cout << "pwd" << endl;
     cin >> pwd;
-    //X509* cert = Managers::CryptoManager::open_certificate((string) "../Server/Docs/SecureChat_cert.pem");
-    //verify_cert(cert);
-    //exit(0);
     //reading client pvt key
     FILE* file;
     string filename = (string)  CERT_DIR + username + "_key.pem" ;
@@ -74,6 +71,7 @@ int main(){
 
 
     close(server_socket);
+    EVP_PKEY_free(pvt_client_key);
     return  0;
 }
 
@@ -83,6 +81,8 @@ int  verify_cert(X509* cert){
     X509_CRL* ca_crl = CryptoManager::open_crl(CERT_DIR + CA_CRL);
     ISNOT(ca_crl,"opening CA_crl failed")
     int result = CryptoManager::verify_cert(ca_cert,ca_crl,cert);
+    X509_free(ca_cert);
+    X509_CRL_free(ca_crl);
     return result;
 }
 
@@ -131,6 +131,9 @@ int authenticate_to_server(int server_socket, string username, string &online_us
     result = read_encrypted_message(server_socket,server_in_sn, online_users);
     IF_MANAGER_FAILED(result,"reading last handshake message failed",0)
     server_in_sn += 1;
+    delete second_message;
+    delete third_message;
+    X509_free(server_cert);
     return result;
 
 }
@@ -159,7 +162,7 @@ int prepare_third_message(EVP_PKEY* eph_pub_key,Message* msg){
     memmove(to_sign, encrypted_master_secret, encrypted_ms_size);
     //move on pointer to put the rest
     memmove(to_sign + encrypted_ms_size , eph_pub_key_bytes, eph_pub_key_bytes_size);
-    free(eph_pub_key_bytes);
+    delete eph_pub_key_bytes;
 
 
     //sign
@@ -180,9 +183,8 @@ int prepare_third_message(EVP_PKEY* eph_pub_key,Message* msg){
     //generate session key
     sever_session_key = CryptoManager::compute_session_key(master_secret,KEY_LENGTH);
     IF_MANAGER_FAILED(sever_session_key,"generating session key failed",0)
-
-    for(int i=0; i < KEY_LENGTH; i++)
-        cout << (int) sever_session_key[i] << endl;
+    destroy_secret(master_secret,KEY_LENGTH);
+    delete to_sign;
     return 1;
 }
 int read_encrypted_message(int socket,uint32_t sequence_number,string &message){
@@ -201,7 +203,8 @@ int read_encrypted_message(int socket,uint32_t sequence_number,string &message){
         plaintext[pt_len-1] = '\0';
     message = (string) (char*)plaintext;
     delete data;
-    free(aad);
-    free(iv);
+    delete aad;
+    delete iv;
+    delete plaintext;
     return pt_len > 0;
 }

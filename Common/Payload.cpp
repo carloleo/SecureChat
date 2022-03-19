@@ -54,11 +54,11 @@ void Payload::setCert(X509 *cert) {
 
 Payload::~Payload() {
     if(signature)
-        free(signature);
+        delete signature;
     if(ciphertext)
-        free(ciphertext);
+        delete ciphertext;
     if(auth_tag)
-        free(auth_tag);
+        delete auth_tag;
     EVP_PKEY_free(t_pub_key);
 
 }
