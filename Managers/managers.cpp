@@ -224,6 +224,7 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
     uint32_t nonce;
     int tmp;
     uint32_t len;
+    uint32_t  sequence_number;
     //send type
     tmp = msg->getType();
     result = SocketManager::write_n(socket,sizeof(int),(void*)&tmp);
@@ -259,6 +260,10 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
             IF_IO_ERROR(result,result);
             break;
         case AUTH_KEY_EXCHANGE_RESPONSE:
+            //send sequence number
+            sequence_number = msg->getSequenceN();
+            result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result,result)
             //send encrypted online users list
             len = msg->getCTxtLen();
             result = SocketManager::send_data(socket,msg->getPayload()->getCiphertext(),len);
@@ -266,6 +271,17 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
             //send authentication tag
             result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
             IF_IO_ERROR(result,result);
+            break;
+        case REQUEST_TO_TALK:
+            sequence_number = msg->getSequenceN();
+            result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result,result)
+            result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
+            IF_IO_ERROR(result,result)
+            result = SocketManager::write_string(socket,msg->getSender());
+            IF_IO_ERROR(result,result)
+            result = SocketManager::write_string(socket,msg->getRecipient());
+            IF_IO_ERROR(result,result)
             break;
         case ERROR:
             result = SocketManager::write_string(socket,msg->getPayload()->getErrorMessage());
@@ -280,6 +296,7 @@ Message* Managers::SocketManager::read_message(int socket){
     Message* msg = nullptr;
     int tmp;
     uint32_t nonce;
+    uint32_t sequence_number;
     EVP_PKEY* pub_key = NULL;
     X509* cert = NULL;
     unsigned char* signature;
@@ -287,6 +304,8 @@ Message* Managers::SocketManager::read_message(int socket){
     unsigned char* ciphertext;
     uint32_t ciphertext_len;
     string username;
+    string  sender;
+    string recipient;
     string error_message;
     //OPENSSL_FAIL(m_bio,"allocating bio fail",0)
     int type = 0;
@@ -345,6 +364,8 @@ Message* Managers::SocketManager::read_message(int socket){
             msg->getPayload()->setCiphertext(ciphertext);
             break;
         case AUTH_KEY_EXCHANGE_RESPONSE:
+            result = SocketManager::read_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result, nullptr)
             //read encrypted online users list
             result = SocketManager::read_data(socket,&ciphertext,&ciphertext_len);
             IF_IO_ERROR(result, nullptr);
@@ -355,8 +376,25 @@ Message* Managers::SocketManager::read_message(int socket){
             IF_IO_ERROR(result, nullptr);
             NEW(msg,new Message(),"msg read_message")
             msg->setType(AUTH_KEY_EXCHANGE_RESPONSE);
+            msg->setSequenceN(sequence_number);
             msg->setCTxtLen(ciphertext_len);
             msg->getPayload()->setCiphertext(ciphertext);
+            msg->getPayload()->setAuthTag(auth_tag);
+            break;
+        case REQUEST_TO_TALK:
+            result = SocketManager::read_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result, nullptr)
+            result = SocketManager::read_data(socket,&auth_tag,&size);
+            IF_IO_ERROR(result, nullptr)
+            result = SocketManager::read_string(socket,sender);
+            IF_IO_ERROR(result, nullptr)
+            result = SocketManager::read_string(socket,recipient);
+            IF_IO_ERROR(result, nullptr)
+            msg = new Message();
+            msg->setType(REQUEST_TO_TALK);
+            msg->setSender(sender);
+            msg->setRecipient(recipient);
+            msg->setSequenceN(sequence_number);
             msg->getPayload()->setAuthTag(auth_tag);
             break;
         case ERROR:
@@ -852,7 +890,7 @@ int Managers::CryptoManager::authenticate_data(unsigned char* aad, uint32_t aad_
                                                unsigned char* tag) {
     int not_used;
     int len = 0;
-    unsigned  char*ciphertex;
+    unsigned  char* ciphertex;
     //create context
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     OPENSSL_FAIL(ctx,"allocation cipher context failed",0)

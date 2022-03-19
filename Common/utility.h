@@ -47,7 +47,7 @@ static inline unsigned char* uint32_to_bytes(uint32_t num){
     }
     return bytes;
 }
-static inline void destroy_secret(void* ptr, size_t size){
+static inline void destroy_secret(unsigned char* ptr, size_t size){
 #pragma optimize("", off)
     memset(ptr, 0, size);
 #pragma optmize("", on)

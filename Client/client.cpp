@@ -49,15 +49,15 @@ int main(){
         close(server_socket);
         exit(EXIT_FAILURE);
     }
-    cout << "ONLINE USERS" << endl << online_users;
     while (!done){
         cout << "Type command" << endl;
         cin >> command;
         string recipient;
         Message message;
+        Message* reply;
         switch (commands[command]) {
             case TALK:
-                cout << "select recipient among online users" << endl;
+                cout << "select the recipient among online users" << endl;
                 cout << online_users << endl;
                 cin >> recipient;
                 if(online_users.find(recipient) == std::string::npos)
@@ -79,8 +79,7 @@ int main(){
                     not_used = SocketManager::send_message(server_socket,&message);
                     IF_MANAGER_FAILED(not_used,"Sending request to talk",1)
                     server_out_sn += 1;
-
-
+                    delete iv;
                 }
                 break;
             case QUIT:

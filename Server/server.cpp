@@ -275,6 +275,22 @@ int manage_message(int socket, Message* message){
             result = SocketManager::send_encrypted_message(socket,sender->getSnServer(),session_key,online_users,AUTH_KEY_EXCHANGE_RESPONSE);
             delete to_verify;
             break;
+        case REQUEST_TO_TALK:
+            username_sender = message->getSender();
+            sender = session->get_user(username_sender);
+            //wrong sequence number
+            if(message->getSequenceN() != sender->getSnUser())
+                return 0;
+            iv = CryptoManager::generate_iv(message->getSequenceN());
+            IF_MANAGER_FAILED(iv,"request to talk generating iv",0)
+            aad = uint32_to_bytes(message->getSequenceN());
+            result = CryptoManager::verify_auth_data(aad,sizeof(uint32_t),iv,sender->getSessionKey(),
+                                            message->getPayload()->getAuthTag());
+            IF_MANAGER_FAILED(result,"request to talk verifying tag",0)
+            // TODO: forward request to talk
+            delete iv;
+            delete aad;
+            break;
         default:
             cerr << "wrong type!!" << endl;
 

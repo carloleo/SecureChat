@@ -142,12 +142,14 @@ int prepare_third_message(EVP_PKEY* eph_pub_key,Message* msg){
 }
 int read_encrypted_message(int socket,uint32_t sequence_number,string &message){
     Message* data = SocketManager::read_message(socket);
+    //if not expected sequence number return: reply attack
+    if(sequence_number != data->getSequenceN())
+        return 0;
     unsigned char* iv = CryptoManager::generate_iv(sequence_number);
     unsigned char* plaintext;
     unsigned char* aad = uint32_to_bytes(sequence_number);
     int pt_len;
     NEW(plaintext,new unsigned  char [data->getCTxtLen()],"plaintext")
-    BIO_dump_fp(stderr,(const char*)data->getPayload()->getAuthTag(),16);
     pt_len = CryptoManager::gcm_decrypt(data->getPayload()->getCiphertext(),data->getCTxtLen(),
                                         aad,4,data->getPayload()->getAuthTag(),
                                         sever_session_key,iv,IV_LEN,plaintext);
