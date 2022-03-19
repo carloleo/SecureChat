@@ -152,7 +152,36 @@ int Managers::SocketManager::read_certificate(int socket, X509 **cert) {
 
 
 }
-
+int Managers::SocketManager::send_encrypted_message(int socket, uint32_t sequence_number, unsigned char*session_key,
+                                                    string body, MESSAGE_TYPE type) {
+    unsigned char* auth_tag;
+    unsigned char* ciphertext;
+    uint32_t cipher_len;
+    int result = 0;
+    unsigned char* aad= uint32_to_bytes(sequence_number);
+    unsigned char* iv = CryptoManager::generate_iv(sequence_number);
+    size_t plain_size = body.length();
+    NEW(auth_tag,new unsigned  char [TAG_LEN],"auth_tag")
+    NEW(ciphertext, new unsigned  char[plain_size],"ciphertext")
+    cipher_len = CryptoManager::gcm_encrypt((unsigned char*)body.c_str(),plain_size,
+                                            aad,4,session_key,
+                                            iv,4,ciphertext,auth_tag);
+    IF_MANAGER_FAILED(cipher_len,"encrypting last handshake message failed",0)
+    Message* message = new Message();
+    //prepare message
+    message->setType(type);
+    message->setSequenceN(sequence_number);
+    message->setCTxtLen(cipher_len);
+    message->getPayload()->setCiphertext(ciphertext);
+    message->getPayload()->setAuthTag(auth_tag);
+    //send message
+    result = SocketManager::send_message(socket,message);
+    delete message;
+    delete iv;
+    delete aad;
+    IF_MANAGER_FAILED(result,"sending last handshake message failed",0)
+    return result;
+}
 int Managers::SocketManager::read_public_key(int socket, EVP_PKEY **pubkey) {
     int result;
     unsigned char* pub_key_buff = NULL;
@@ -817,4 +846,50 @@ unsigned char* Managers::CryptoManager::generate_iv(uint32_t sequence_number) {
         iv[i] = (unsigned char)i;
     delete bytes;
     return iv;
+}
+
+int Managers::CryptoManager::authenticate_data(unsigned char* aad, uint32_t aad_len,unsigned char* iv, unsigned char*key,
+                                               unsigned char* tag) {
+    int not_used;
+    int len = 0;
+    unsigned  char*ciphertex;
+    //create context
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    OPENSSL_FAIL(ctx,"allocation cipher context failed",0)
+    //init context
+    not_used = EVP_EncryptInit(ctx,CIPHER,key,iv);
+    OPENSSL_FAIL(not_used,"initializing cipher failed",0)
+    not_used = EVP_EncryptUpdate(ctx, nullptr, &len, aad, aad_len);
+    OPENSSL_FAIL(not_used,"adding aad failed",0);
+    not_used = EVP_EncryptFinal(ctx, ciphertex, &len);
+    OPENSSL_FAIL(not_used,"encryption failed",0)
+    not_used = EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, TAG_LEN, tag);
+    OPENSSL_FAIL(not_used,"getting authentication tag failed",0)
+    EVP_CIPHER_CTX_free(ctx);
+    return 1;
+}
+int Managers::CryptoManager::verify_auth_data(unsigned char *aad, uint32_t aad_len, unsigned char *iv,
+                                              unsigned char *key, unsigned char *tag) {
+    EVP_CIPHER_CTX *ctx;
+    int not_used;
+    int len;
+    int plaintext_len;
+    unsigned char* plaintext;
+    /* Create and initialise the context */
+    ctx = EVP_CIPHER_CTX_new();
+    OPENSSL_FAIL(ctx,"allocation cipher context failed",0)
+    not_used = EVP_DecryptInit(ctx, CIPHER, key, iv);
+    OPENSSL_FAIL(not_used,"initializing cipher failed",0)
+    //Provide any AAD data.
+    not_used = EVP_DecryptUpdate(ctx, nullptr, &len, aad, aad_len);
+    OPENSSL_FAIL(not_used,"adding aad failed",0);
+    //Set expected tag value. Works in OpenSSL 1.0.1d and later
+    not_used = EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, TAG_LEN, tag);
+    OPENSSL_FAIL(not_used,"setting expected tag value failed",0)
+    // finalize decryption and compare authentication tags
+    not_used = EVP_DecryptFinal(ctx, plaintext, &len);
+    // cleaning up
+    EVP_CIPHER_CTX_free(ctx);
+    return not_used > 0;
+
 }

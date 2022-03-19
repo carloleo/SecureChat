@@ -27,6 +27,8 @@ namespace Managers {
         int read_data(int socket,unsigned char** data, uint32_t *len);
         int read_certificate(int socket, X509** cert);
         int read_public_key(int socket, EVP_PKEY** pubkey);
+        int send_encrypted_message(int socket, uint32_t sequence_number, unsigned char*session_key,
+                               std::string body, MESSAGE_TYPE type);
 
 
     }
@@ -64,6 +66,10 @@ namespace Managers {
                         size_t* plain_size,EVP_PKEY* pvt_key);
         int pkey_to_bytes(EVP_PKEY* pkey,unsigned char** pkey_bytes, uint32_t* bytes_size);
         unsigned char* generate_iv(uint32_t sequence_number);
+        int authenticate_data(unsigned char* aad, uint32_t aad_len,unsigned char* iv, unsigned char*key,
+                              unsigned char* tag);
+        int verify_auth_data(unsigned char* aad, uint32_t aad_len,unsigned char* iv, unsigned char*key,
+                              unsigned char* tag);
     }
 }
 

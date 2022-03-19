@@ -28,7 +28,7 @@ public:
 
     void setSnServer(uint32_t snServer);
 
-    void deleteSessionKey() const;
+    void deleteSessionKey();
     ~User();
 
 public:

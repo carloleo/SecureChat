@@ -29,9 +29,11 @@ bool User::isOnline() const {
     return is_online;
 }
 
-void User::deleteSessionKey() const{
-    if(session_key)
-        destroy_secret(session_key,KEY_LENGTH);
+void User::deleteSessionKey(){
+    if(session_key) {
+        destroy_secret(session_key, KEY_LENGTH);
+        session_key = nullptr;
+    }
 
 }
 User::~User() {

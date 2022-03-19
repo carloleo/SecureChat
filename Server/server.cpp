@@ -94,8 +94,6 @@ Session* configure_server(void){
     string line;
     X509* cert;
     fstream users_file(USERS_FILE);
-    cout << USERS_FILE << endl;
-    cout << users_file.is_open() << endl;
     while(users_file.is_open() && getline(users_file,line)){
         usernames = parse_line(line);
         for(auto username : usernames) {
@@ -274,29 +272,7 @@ int manage_message(int socket, Message* message){
             //retrieve online users
             online_users = session->get_online_users();
             //encrypt message
-            server_sn =  sender->getSnServer();
-            aad = uint32_to_bytes(server_sn);
-            iv = CryptoManager::generate_iv(server_sn);
-            NEW(auth_tag,new unsigned  char [TAG_LEN],"auth_tag")
-            NEW(ciphertext, new unsigned  char[online_users.length()],"ciphertext")
-            plain_size = online_users.length();
-            cipher_len = CryptoManager::gcm_encrypt((unsigned char*)online_users.c_str(),plain_size,
-                                                    aad,4,session_key,
-                                                iv,4,ciphertext,auth_tag);
-            delete iv;
-            IF_MANAGER_FAILED(result,"encrypting last handshake message failed",0)
-            //prepare message
-            reply->setType(AUTH_KEY_EXCHANGE_RESPONSE);
-            reply->setSequenceN(server_sn);
-            reply->setCTxtLen(cipher_len);
-            reply->getPayload()->setCiphertext(ciphertext);
-            reply->getPayload()->setAuthTag(auth_tag);
-            //send message
-            result = SocketManager::send_message(socket,reply);
-            IF_MANAGER_FAILED(result,"sending last handshake message failed",0)
-            sender->setSnServer(server_sn + 1);
-            delete reply;
-            delete aad;
+            result = SocketManager::send_encrypted_message(socket,sender->getSnServer(),session_key,online_users,AUTH_KEY_EXCHANGE_RESPONSE);
             delete to_verify;
             break;
         default:
