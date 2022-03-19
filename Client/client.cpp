@@ -10,10 +10,10 @@
 using namespace std;
 using namespace Managers;
 void usage();
-int authenticate_to_server(int server_socket,string username);
+int authenticate_to_server(int server_socket,string username,string &online_users);
 int verify_cert(X509*);
-EVP_PKEY* save_cert(X509* cert);
 int prepare_third_message(EVP_PKEY*,Message*);
+int read_encrypted_message(int socket,uint32_t sequence_number,string &message);
 //receive it to server
 uint32_t server_in_sn = 0;
 //send it to server
@@ -31,6 +31,7 @@ int main(){
     int not_used;
     struct sockaddr_in server_address;
     string  command;
+    string online_users;
     bool done = false;
     //TODO: parsing parameters
     //open socket
@@ -50,8 +51,8 @@ int main(){
     cout << "authentication in progress..." << endl;
     //IDE does not allow to open promt
     string pwd;
-    //cout << "pwd" << endl;
-    //cin >> pwd;
+    cout << "pwd" << endl;
+    cin >> pwd;
     //X509* cert = Managers::CryptoManager::open_certificate((string) "../Server/Docs/SecureChat_cert.pem");
     //verify_cert(cert);
     //exit(0);
@@ -60,16 +61,16 @@ int main(){
     string filename = (string)  CERT_DIR + username + "_key.pem" ;
     file = fopen(filename.c_str(),"r");
     ISNOT(file,"opening client private key fail failed")
-    pvt_client_key = PEM_read_PrivateKey(file,NULL,NULL,NULL/*(void*) pwd.c_str()*/);
+    pvt_client_key = PEM_read_PrivateKey(file,NULL,NULL,(void*) pwd.c_str());
     fclose(file);
     ISNOT(pvt_client_key,"reading client pvt key failed")
-    not_used = authenticate_to_server(server_socket,username);
+    not_used = authenticate_to_server(server_socket,username,online_users);
     if(!not_used){
         cerr << "Authentication failed: cannot proceed!" << endl;
         close(server_socket);
         exit(EXIT_FAILURE);
     }
-
+    cout << "ONLINE USERS" << endl << online_users;
 
 
     close(server_socket);
@@ -85,7 +86,7 @@ int  verify_cert(X509* cert){
     return result;
 }
 
-int authenticate_to_server(int server_socket, string username){
+int authenticate_to_server(int server_socket, string username, string &online_users){
     int result;
     Message *second_message;
     Message* first_message;
@@ -119,7 +120,7 @@ int authenticate_to_server(int server_socket, string username){
     result = CryptoManager::verify_signed_pubKey(eph_pub_key,nonce,server_pub_key,signature,
                                                  signature_length);
     IF_MANAGER_FAILED(result,"verifying ephemeral signed public key failed",0)
-    delete second_message;
+    //delete second_message;
     //send third message
     Message* third_message;
     NEW(third_message,new Message(),"third message");
@@ -127,17 +128,9 @@ int authenticate_to_server(int server_socket, string username){
     IF_MANAGER_FAILED(result,"prepare third message failed",0)
     result = SocketManager::send_message(server_socket,third_message);
     IF_MANAGER_FAILED(result,"sending third message failed",0)
-    Message* data = SocketManager::read_message(server_socket);
-    unsigned char* iv = CryptoManager::generate_iv(server_in_sn);
-    unsigned char* plaintext = nullptr;
-    unsigned char* add = uint32_to_bytes(server_in_sn);
-    NEW(plaintext,new unsigned  char [data->getCTxtLen()],"plaintext")
-    result= CryptoManager::gcm_decrypt(data->getPayload()->getCiphertext(),data->getCTxtLen(),
-                               add,4,data->getPayload()->getAuthTag(),
-                               sever_session_key,iv,EVP_CIPHER_iv_length(CIPHER),plaintext);
-    cout<<"PT:"<<endl;
-    BIO_dump_fp (stdout, (const char *)plaintext, data->getCTxtLen());
-    //TODO: refactor and clean up
+    result = read_encrypted_message(server_socket,server_in_sn, online_users);
+    IF_MANAGER_FAILED(result,"reading last handshake message failed",0)
+    server_in_sn += 1;
     return result;
 
 }
@@ -192,19 +185,23 @@ int prepare_third_message(EVP_PKEY* eph_pub_key,Message* msg){
         cout << (int) sever_session_key[i] << endl;
     return 1;
 }
-/*EVP_PKEY* save_cert(X509* cert){
-    BIO* b = BIO_new(BIO_s_mem());
-    PEM_write_bio_X509(b,cert);
-    long size = BIO_pending(b);
-    char* buff =  new char[size];
-    BIO_read(b,buff,size);
-    FILE* f = fopen("/tmp/tmp_cert.pem","w");
+int read_encrypted_message(int socket,uint32_t sequence_number,string &message){
+    Message* data = SocketManager::read_message(socket);
+    unsigned char* iv = CryptoManager::generate_iv(sequence_number);
+    unsigned char* plaintext;
+    unsigned char* aad = uint32_to_bytes(sequence_number);
+    int pt_len;
+    NEW(plaintext,new unsigned  char [data->getCTxtLen()],"plaintext")
+    BIO_dump_fp(stderr,(const char*)data->getPayload()->getAuthTag(),16);
+    pt_len = CryptoManager::gcm_decrypt(data->getPayload()->getCiphertext(),data->getCTxtLen(),
+                                        aad,4,data->getPayload()->getAuthTag(),
+                                        sever_session_key,iv,IV_LEN,plaintext);
 
-    fclose(f);
-    f = fopen("../Server/Docs/tmp_cert.pem","r");
-    EVP_PKEY* pkey = PEM_read_PUBKEY(f,NULL,NULL,NULL);
-    return pkey;
-
-
+    if(pt_len > 0)
+        plaintext[pt_len-1] = '\0';
+    message = (string) (char*)plaintext;
+    delete data;
+    free(aad);
+    free(iv);
+    return pt_len > 0;
 }
-*/
