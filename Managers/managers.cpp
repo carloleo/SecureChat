@@ -12,7 +12,7 @@
 #include <openssl/x509.h>
 #include <openssl/rand.h>
 #include <openssl/rsa.h>
-#include <openssl/engine.h>
+//#include <openssl/engine.h>
 #include <iostream>
 #include <string>
 #include <limits>
@@ -318,10 +318,10 @@ Message* Managers::SocketManager::read_message(int socket){
             //read encrypted online users list
             result = SocketManager::read_data(socket,&ciphertext,&ciphertext_len);
             IF_IO_ERROR(result, nullptr);
-            //send authentication tag
+            //read authentication tag
             unsigned char* auth_tag;
-            NEW(auth_tag,new unsigned char[TAG_LEN],"auth tag")
-            result = SocketManager::read_n(socket,TAG_LEN,(void*)auth_tag);
+            uint32_t size;
+            result = SocketManager::read_data(socket,&auth_tag,&size);
             IF_IO_ERROR(result, nullptr);
             NEW(msg,new Message(),"msg read_message")
             msg->setType(AUTH_KEY_EXCHANGE_RESPONSE);
@@ -412,7 +412,6 @@ int Managers::CryptoManager::gcm_decrypt(unsigned char *ciphertext, int cipherte
 
     // finalize decryption and compare authentication tags
     not_used = EVP_DecryptFinal(ctx, plaintext, &len);
-
     // cleaning up
     EVP_CIPHER_CTX_cleanup(ctx);
 
@@ -501,7 +500,7 @@ int Managers::CryptoManager::verify_cert(X509* ca_cert, X509_CRL* crl, X509* cer
     X509_STORE* store;
     int not_used;
     store = X509_STORE_new();
-    OPENSSL_FAIL(not_used,"allocating store failed",0)
+    OPENSSL_FAIL(store,"allocating store failed",0)
     //add CA's cert
     not_used = X509_STORE_add_cert(store,ca_cert);
     OPENSSL_FAIL(not_used,"adding certificate failed",0)
@@ -803,7 +802,7 @@ int Managers::CryptoManager::pkey_to_bytes(EVP_PKEY *pkey, unsigned char **pkey_
 
 unsigned char* Managers::CryptoManager::generate_iv(uint32_t sequence_number) {
     unsigned char* iv;
-    size_t len = EVP_CIPHER_iv_length(CIPHER);
+    size_t len = IV_LEN;
     NEW(iv,new unsigned char[len],"iv")
     unsigned char* bytes = uint32_to_bytes(sequence_number);
     int b = 24;
@@ -813,5 +812,6 @@ unsigned char* Managers::CryptoManager::generate_iv(uint32_t sequence_number) {
     iv[3] = bytes[3];
     for(int i = 4; i < len; i++)
         iv[i] = (unsigned char)i;
+    free(bytes);
     return iv;
 }
