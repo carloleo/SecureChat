@@ -3,7 +3,6 @@
 //
 
 #include "Session.h"
-
 User* Session::get_user(string username) {
     return users.at(username);
 }
@@ -51,6 +50,8 @@ void Session::disconnect_client(int socket) {
         if (socket == usr->second->getSocket()) {
             usr->second->setIsOnline(false);
             string username = usr->second->getUserName();
+            //session key
+            usr->second->deleteSessionKey();
             //ephemeral keys
             destroy_ephemeral_keys(username);
             done = true;

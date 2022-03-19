@@ -14,7 +14,7 @@ private:
     unsigned char* session_key = nullptr;
     bool is_online;
     int socket;
-    EVP_PKEY* public_key;
+    EVP_PKEY* public_key = nullptr;
     uint32_t sn_user; //sequence numbers
     uint32_t sn_server;
 public:

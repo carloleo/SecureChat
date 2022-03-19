@@ -2,7 +2,7 @@
 // Created by crl on 3/1/22.
 //
 
-#include <cstring>
+
 #include "User.h"
 #include "../Common/utility.h"
 const std::string &User::getUserName() const {
@@ -30,17 +30,13 @@ bool User::isOnline() const {
 }
 
 void User::deleteSessionKey() const{
-    if(session_key) {
-#pragma optimize("", off)
-        memset(session_key, 0, KEY_LENGTH);
-#pragma optmize("", on)
-        free(session_key);
-    }
+    if(session_key)
+        destroy_secret(session_key,KEY_LENGTH);
+
 }
 User::~User() {
     deleteSessionKey();
-    if(public_key)
-        EVP_PKEY_free(public_key);
+    EVP_PKEY_free(public_key);
 }
 
 void User::setSocket(int socket) {

@@ -258,8 +258,11 @@ int manage_message(int socket, Message* message){
             //free ephemeral keys
             session->destroy_ephemeral_keys(username_sender);
             IF_MANAGER_FAILED(result,"decrypting master secret failed",0)
+            //plaintext is the shared master secret
             session_key = CryptoManager::compute_session_key(plaintext,plain_size);
-            IF_MANAGER_FAILED(result,"decrypting master secret failed",0)
+            IF_MANAGER_FAILED(session_key,"computing session key failed",0)
+            //destroy master secret
+            destroy_secret(plaintext,plain_size);
             //set user's session key
             sender = session->get_user(username_sender);
             sender->setSessionKey(session_key);
@@ -295,7 +298,6 @@ int manage_message(int socket, Message* message){
             delete reply;
             free(aad);
             free(to_verify);
-            free(plaintext);
             break;
         default:
             cerr << "wrong type!!" << endl;
