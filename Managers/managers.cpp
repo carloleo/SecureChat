@@ -940,3 +940,29 @@ int Managers::CryptoManager::verify_auth_data(unsigned char *aad, uint32_t aad_l
     return not_used > 0;
 
 }
+
+int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** bytes){
+    BIO* bio = BIO_new(BIO_s_mem());
+    size_t len;
+    int not_used;
+    OPENSSL_FAIL(bio,"allocating bio stream message to bytes failed",0)
+    switch (message->getType()) {
+        case REQUEST_TO_TALK:
+          not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
+          OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+          not_used = BIO_write(bio,message->getRecipient().c_str(),message->getRecipient().length());
+          OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+          not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+          OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+          not_used = BIO_write(bio,message->getIv(),IV_LEN);
+          OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+          break;
+        default:
+            break;
+    }
+    len = BIO_pending(bio);
+    NEW(*bytes,new unsigned char[len],"message to bytes allocating buffer failed")
+    BIO_read(bio,*bytes,len);
+    BIO_free(bio);
+    return len;
+}

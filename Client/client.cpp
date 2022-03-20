@@ -72,14 +72,16 @@ int main(){
                     unsigned char* iv;
                     iv = CryptoManager::generate_iv();
                     IF_MANAGER_FAILED(iv,"generating iv failed",1)
+                    message.setIv(iv);
+                    //authenticate request
                     unsigned char* tag;
                     NEW(tag,new unsigned char[TAG_LEN],"allocating tag")
                     unsigned char* aad = uint32_to_bytes(server_out_sn);
+                    size_t len = CryptoManager::message_to_bytes(&message,&aad);
                     not_used = CryptoManager::authenticate_data(aad,
-                                                                sizeof(uint32_t),iv,sever_session_key,tag);
+                                                                len,iv,sever_session_key,tag);
                     IF_MANAGER_FAILED(not_used,"Authenticate data failed",1)
                     message.getPayload()->setAuthTag(tag);
-                    message.setIv(iv);
                     not_used = SocketManager::send_message(server_socket,&message);
                     IF_MANAGER_FAILED(not_used,"Sending request to talk",1)
                     server_out_sn += 1;

@@ -177,6 +177,7 @@ int manage_message(int socket, Message* message){
     unsigned char* iv ;
     uint32_t server_sn = 0;
     string online_users;
+    size_t len;
     int cipher_len = 0;
     NEW(reply,new Message(),"reply")
     switch (message->getType()) {
@@ -284,8 +285,8 @@ int manage_message(int socket, Message* message){
                 return 0;
             iv = message->getIv();
             IF_MANAGER_FAILED(iv,"request to talk generating iv",0)
-            aad = uint32_to_bytes(message->getSequenceN());
-            result = CryptoManager::verify_auth_data(aad,sizeof(uint32_t),iv,sender->getSessionKey(),
+            len = CryptoManager::message_to_bytes(message,&aad);
+            result = CryptoManager::verify_auth_data(aad,len,iv,sender->getSessionKey(),
                                             message->getPayload()->getAuthTag());
             IF_MANAGER_FAILED(result,"request to talk verifying tag",0)
             sender->increment_user_sn();
@@ -294,6 +295,7 @@ int manage_message(int socket, Message* message){
             break;
         default:
             cerr << "wrong type!!" << endl;
+            break;
 
     }
     //clean messages

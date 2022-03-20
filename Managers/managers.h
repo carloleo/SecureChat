@@ -70,6 +70,7 @@ namespace Managers {
                               unsigned char* tag);
         int verify_auth_data(unsigned char* aad, uint32_t aad_len,unsigned char* iv, unsigned char*key,
                               unsigned char* tag);
+        int message_to_bytes(Message* message, unsigned char** bytes);
     }
 }
 
