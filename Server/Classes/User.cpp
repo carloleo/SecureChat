@@ -64,7 +64,12 @@ uint32_t User::getSnUser() const {
 uint32_t User::getSnServer() const {
     return sn_server;
 }
-
+void User::increment_server_sn() {
+    sn_server += 1;
+}
+void User::increment_user_sn() {
+    sn_user += 1;
+}
 void User::setSnUser(uint32_t snUser) {
     sn_user = snUser;
 }

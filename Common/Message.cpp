@@ -36,11 +36,14 @@ void Message::setPayload(Payload *payload) {
 }
 
 Message::~Message() {
+    if(iv)
+        delete iv;
     if(payload)
         delete payload;
 }
 
 Message::Message() {
+    iv = nullptr;
     NEW(payload, new Payload(),"payload")
 }
 
@@ -82,5 +85,13 @@ uint32_t Message::getSignatureLen() const {
 
 void Message::setSignatureLen(uint32_t signatureLen) {
     signature_len = signatureLen;
+}
+
+unsigned char *Message::getIv() const {
+    return iv;
+}
+
+void Message::setIv(unsigned char *iv) {
+    Message::iv = iv;
 }
 

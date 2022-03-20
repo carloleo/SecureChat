@@ -83,7 +83,6 @@ int authenticate_to_server(int server_socket, string username, string &online_us
     IF_MANAGER_FAILED(result,"sending third message failed",0)
     result = read_encrypted_message(server_socket,server_in_sn, online_users);
     IF_MANAGER_FAILED(result,"reading last handshake message failed",0)
-    server_in_sn += 1;
     delete second_message;
     delete third_message;
     X509_free(server_cert);
@@ -145,21 +144,20 @@ int read_encrypted_message(int socket,uint32_t sequence_number,string &message){
     //if not expected sequence number return: reply attack
     if(sequence_number != data->getSequenceN())
         return 0;
-    unsigned char* iv = CryptoManager::generate_iv(sequence_number);
+
     unsigned char* plaintext;
     unsigned char* aad = uint32_to_bytes(sequence_number);
     int pt_len;
     NEW(plaintext,new unsigned  char [data->getCTxtLen()],"plaintext")
     pt_len = CryptoManager::gcm_decrypt(data->getPayload()->getCiphertext(),data->getCTxtLen(),
                                         aad,4,data->getPayload()->getAuthTag(),
-                                        sever_session_key,iv,IV_LEN,plaintext);
+                                        sever_session_key,data->getIv(),IV_LEN,plaintext);
 
     if(pt_len > 0)
         plaintext[pt_len-1] = '\0';
     message = (string) (char*)plaintext;
     delete data;
     delete aad;
-    delete iv;
     delete plaintext;
     return pt_len > 0;
 }

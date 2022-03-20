@@ -39,7 +39,8 @@ public:
     EVP_PKEY *getPublicKey() const;
     uint32_t getSnUser() const;
     uint32_t getSnServer() const;
-
+    void increment_server_sn();
+    void increment_user_sn();
 };
 
 

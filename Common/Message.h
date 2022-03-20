@@ -18,6 +18,7 @@ private:
     uint32_t cert_len; // certificate length
     uint32_t c_txt_len; //ciphertext length
     uint32_t sequence_n; //sequence number
+    unsigned char* iv; //initialization vector
     uint32_t signature_len;
     std::string sender;
     std::string recipient;
@@ -48,6 +49,7 @@ public:
 
     uint32_t getSignatureLen() const;
 
+    unsigned char *getIv() const;
 
 
     void setType(MESSAGE_TYPE type);
@@ -67,6 +69,8 @@ public:
     void setSequenceN(uint32_t sequenceN);
 
     void setSignatureLen(uint32_t signatureLen);
+
+    void setIv(unsigned char *iv);
 
 
     virtual ~Message();

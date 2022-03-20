@@ -159,7 +159,7 @@ int Managers::SocketManager::send_encrypted_message(int socket, uint32_t sequenc
     uint32_t cipher_len;
     int result = 0;
     unsigned char* aad= uint32_to_bytes(sequence_number);
-    unsigned char* iv = CryptoManager::generate_iv(sequence_number);
+    unsigned char* iv = CryptoManager::generate_iv();
     size_t plain_size = body.length();
     NEW(auth_tag,new unsigned  char [TAG_LEN],"auth_tag")
     NEW(ciphertext, new unsigned  char[plain_size],"ciphertext")
@@ -171,13 +171,13 @@ int Managers::SocketManager::send_encrypted_message(int socket, uint32_t sequenc
     //prepare message
     message->setType(type);
     message->setSequenceN(sequence_number);
+    message->setIv(iv);
     message->setCTxtLen(cipher_len);
     message->getPayload()->setCiphertext(ciphertext);
     message->getPayload()->setAuthTag(auth_tag);
     //send message
     result = SocketManager::send_message(socket,message);
     delete message;
-    delete iv;
     delete aad;
     IF_MANAGER_FAILED(result,"sending last handshake message failed",0)
     return result;
@@ -225,6 +225,7 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
     int tmp;
     uint32_t len;
     uint32_t  sequence_number;
+    unsigned char* iv;
     //send type
     tmp = msg->getType();
     result = SocketManager::write_n(socket,sizeof(int),(void*)&tmp);
@@ -264,6 +265,10 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
             sequence_number = msg->getSequenceN();
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
             IF_IO_ERROR(result,result)
+            //send iv
+            iv = msg->getIv();
+            result = SocketManager::send_data(socket,iv, IV_LEN);
+            IF_IO_ERROR(result,result);
             //send encrypted online users list
             len = msg->getCTxtLen();
             result = SocketManager::send_data(socket,msg->getPayload()->getCiphertext(),len);
@@ -276,6 +281,9 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
             sequence_number = msg->getSequenceN();
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
             IF_IO_ERROR(result,result)
+            iv = msg->getIv();
+            result = SocketManager::send_data(socket,iv,IV_LEN);
+            IF_IO_ERROR(result,result);
             result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
             IF_IO_ERROR(result,result)
             result = SocketManager::write_string(socket,msg->getSender());
@@ -303,13 +311,14 @@ Message* Managers::SocketManager::read_message(int socket){
     uint32_t signature_len;
     unsigned char* ciphertext;
     uint32_t ciphertext_len;
+    unsigned char* iv;
     string username;
     string  sender;
     string recipient;
     string error_message;
     //OPENSSL_FAIL(m_bio,"allocating bio fail",0)
     int type = 0;
-    size_t size;
+    uint32_t size;
     result = SocketManager::read_n(socket,sizeof(int),(void*)&type);
     IF_IO_ERROR(result, nullptr)
     switch (type) {
@@ -366,23 +375,28 @@ Message* Managers::SocketManager::read_message(int socket){
         case AUTH_KEY_EXCHANGE_RESPONSE:
             result = SocketManager::read_n(socket,sizeof(uint32_t),(void*) &sequence_number);
             IF_IO_ERROR(result, nullptr)
+            //read iv
+            result = SocketManager::read_data(socket,&iv, &size);
+            IF_IO_ERROR(result, nullptr);
             //read encrypted online users list
             result = SocketManager::read_data(socket,&ciphertext,&ciphertext_len);
             IF_IO_ERROR(result, nullptr);
             //read authentication tag
             unsigned char* auth_tag;
-            uint32_t size;
             result = SocketManager::read_data(socket,&auth_tag,&size);
             IF_IO_ERROR(result, nullptr);
             NEW(msg,new Message(),"msg read_message")
             msg->setType(AUTH_KEY_EXCHANGE_RESPONSE);
             msg->setSequenceN(sequence_number);
+            msg->setIv(iv);
             msg->setCTxtLen(ciphertext_len);
             msg->getPayload()->setCiphertext(ciphertext);
             msg->getPayload()->setAuthTag(auth_tag);
             break;
         case REQUEST_TO_TALK:
             result = SocketManager::read_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result, nullptr)
+            result = SocketManager::read_data(socket,&iv,&size);
             IF_IO_ERROR(result, nullptr)
             result = SocketManager::read_data(socket,&auth_tag,&size);
             IF_IO_ERROR(result, nullptr)
@@ -394,6 +408,7 @@ Message* Managers::SocketManager::read_message(int socket){
             msg->setType(REQUEST_TO_TALK);
             msg->setSender(sender);
             msg->setRecipient(recipient);
+            msg->setIv(iv);
             msg->setSequenceN(sequence_number);
             msg->getPayload()->setAuthTag(auth_tag);
             break;
@@ -870,19 +885,13 @@ int Managers::CryptoManager::pkey_to_bytes(EVP_PKEY *pkey, unsigned char **pkey_
     return 1;
 }
 
-unsigned char* Managers::CryptoManager::generate_iv(uint32_t sequence_number) {
+unsigned char* Managers::CryptoManager::generate_iv() {
     unsigned char* iv;
+    int not_used;
     size_t len = IV_LEN;
     NEW(iv,new unsigned char[len],"iv")
-    unsigned char* bytes = uint32_to_bytes(sequence_number);
-    int b = 24;
-    iv[0] = bytes[0];
-    iv[1] = bytes[1];
-    iv[2] = bytes[2];
-    iv[3] = bytes[3];
-    for(int i = 4; i < len; i++)
-        iv[i] = (unsigned char)i;
-    delete bytes;
+    not_used = CryptoManager::generate_random_bytes(iv, len);
+    IF_MANAGER_FAILED(not_used,"generate iv failed", nullptr);
     return iv;
 }
 

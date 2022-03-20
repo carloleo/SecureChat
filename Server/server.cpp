@@ -100,7 +100,6 @@ Session* configure_server(void){
             User* user;
             NEW(user,new User(),"user")
             user->setUserName(username);
-            user->setIsOnline(true);
             EVP_PKEY* pub_key = read_public_key(username);
             user->setPublicKey(pub_key);
             session->add_user(user);
@@ -272,7 +271,9 @@ int manage_message(int socket, Message* message){
             //retrieve online users
             online_users = session->get_online_users();
             //encrypt message
-            result = SocketManager::send_encrypted_message(socket,sender->getSnServer(),session_key,online_users,AUTH_KEY_EXCHANGE_RESPONSE);
+            result = SocketManager::send_encrypted_message(socket,sender->getSnServer(),session_key,
+                                                           online_users,AUTH_KEY_EXCHANGE_RESPONSE);
+            sender->increment_server_sn();
             delete to_verify;
             break;
         case REQUEST_TO_TALK:
@@ -281,14 +282,14 @@ int manage_message(int socket, Message* message){
             //wrong sequence number
             if(message->getSequenceN() != sender->getSnUser())
                 return 0;
-            iv = CryptoManager::generate_iv(message->getSequenceN());
+            iv = message->getIv();
             IF_MANAGER_FAILED(iv,"request to talk generating iv",0)
             aad = uint32_to_bytes(message->getSequenceN());
             result = CryptoManager::verify_auth_data(aad,sizeof(uint32_t),iv,sender->getSessionKey(),
                                             message->getPayload()->getAuthTag());
             IF_MANAGER_FAILED(result,"request to talk verifying tag",0)
+            sender->increment_user_sn();
             // TODO: forward request to talk
-            delete iv;
             delete aad;
             break;
         default:

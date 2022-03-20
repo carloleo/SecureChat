@@ -44,6 +44,8 @@ int main(){
     fclose(file);
     ISNOT(pvt_client_key,"reading client pvt key failed")
     not_used = authenticate_to_server(server_socket,username,online_users);
+    //increment server sequence number
+    server_in_sn += 1;
     if(!not_used){
         cerr << "Authentication failed: cannot proceed!" << endl;
         close(server_socket);
@@ -68,18 +70,20 @@ int main(){
                     message.setRecipient(recipient);
                     message.setSequenceN(server_out_sn);
                     unsigned char* iv;
-                    iv = CryptoManager::generate_iv(message.getSequenceN());
+                    iv = CryptoManager::generate_iv();
                     IF_MANAGER_FAILED(iv,"generating iv failed",1)
                     unsigned char* tag;
                     NEW(tag,new unsigned char[TAG_LEN],"allocating tag")
-                    not_used = CryptoManager::authenticate_data((unsigned char*)&server_out_sn,
-                                                                sizeof(server_out_sn),iv,sever_session_key,tag);
+                    unsigned char* aad = uint32_to_bytes(server_out_sn);
+                    not_used = CryptoManager::authenticate_data(aad,
+                                                                sizeof(uint32_t),iv,sever_session_key,tag);
                     IF_MANAGER_FAILED(not_used,"Authenticate data failed",1)
                     message.getPayload()->setAuthTag(tag);
+                    message.setIv(iv);
                     not_used = SocketManager::send_message(server_socket,&message);
                     IF_MANAGER_FAILED(not_used,"Sending request to talk",1)
                     server_out_sn += 1;
-                    delete iv;
+                    delete aad;
                 }
                 break;
             case QUIT:

@@ -65,7 +65,7 @@ namespace Managers {
         int rsa_decrypt(unsigned char* ciphertext, size_t ciphertext_len, unsigned char** plaintext,
                         size_t* plain_size,EVP_PKEY* pvt_key);
         int pkey_to_bytes(EVP_PKEY* pkey,unsigned char** pkey_bytes, uint32_t* bytes_size);
-        unsigned char* generate_iv(uint32_t sequence_number);
+        unsigned char* generate_iv();
         int authenticate_data(unsigned char* aad, uint32_t aad_len,unsigned char* iv, unsigned char*key,
                               unsigned char* tag);
         int verify_auth_data(unsigned char* aad, uint32_t aad_len,unsigned char* iv, unsigned char*key,
