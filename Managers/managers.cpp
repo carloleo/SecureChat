@@ -291,6 +291,30 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
             result = SocketManager::write_string(socket,msg->getRecipient());
             IF_IO_ERROR(result,result)
             break;
+        case USERS_LIST:
+            sequence_number = msg->getSequenceN();
+            result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result,result)
+            iv = msg->getIv();
+            result = SocketManager::send_data(socket,iv,IV_LEN);
+            IF_IO_ERROR(result,result);
+            result = SocketManager::write_string(socket,msg->getSender());
+            IF_IO_ERROR(result,result)
+            result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
+            IF_IO_ERROR(result,result)
+            break;
+        case  USERS_LIST_RESPONSE:
+            sequence_number = msg->getSequenceN();
+            result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result,result)
+            iv = msg->getIv();
+            result = SocketManager::send_data(socket,iv,IV_LEN);
+            IF_IO_ERROR(result,result);
+            result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
+            IF_IO_ERROR(result,result)
+            result = SocketManager::send_data(socket,msg->getPayload()->getCiphertext(),msg->getCTxtLen());
+            IF_IO_ERROR(result,result)
+            break;
         case ERROR:
             result = SocketManager::write_string(socket,msg->getPayload()->getErrorMessage());
             break;
@@ -312,6 +336,7 @@ Message* Managers::SocketManager::read_message(int socket){
     unsigned char* ciphertext;
     uint32_t ciphertext_len;
     unsigned char* iv;
+    unsigned char* auth_tag;
     string username;
     string  sender;
     string recipient;
@@ -382,7 +407,6 @@ Message* Managers::SocketManager::read_message(int socket){
             result = SocketManager::read_data(socket,&ciphertext,&ciphertext_len);
             IF_IO_ERROR(result, nullptr);
             //read authentication tag
-            unsigned char* auth_tag;
             result = SocketManager::read_data(socket,&auth_tag,&size);
             IF_IO_ERROR(result, nullptr);
             NEW(msg,new Message(),"msg read_message")
@@ -411,6 +435,44 @@ Message* Managers::SocketManager::read_message(int socket){
             msg->setIv(iv);
             msg->setSequenceN(sequence_number);
             msg->getPayload()->setAuthTag(auth_tag);
+            break;
+        case USERS_LIST:
+            result = SocketManager::read_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result, nullptr)
+            result = SocketManager::read_data(socket,&iv,&size);
+            IF_IO_ERROR(result, nullptr)
+            result = SocketManager::read_string(socket,sender);
+            IF_IO_ERROR(result, nullptr)
+            result = SocketManager::read_data(socket,&auth_tag,&size);
+            IF_IO_ERROR(result, nullptr)
+            msg = new Message();
+            msg->setType(USERS_LIST);
+            msg->setSender(sender);
+            msg->setSequenceN(sequence_number);
+            msg->setIv(iv);
+            msg->getPayload()->setAuthTag(auth_tag);
+            break;
+        case  USERS_LIST_RESPONSE:
+            //read sn
+            result = SocketManager::read_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result, nullptr)
+            //read iv
+            result = SocketManager::read_data(socket,&iv,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read tag
+            result = SocketManager::read_data(socket,&auth_tag,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read encrypted online users list
+            result = SocketManager::read_data(socket,&ciphertext,&ciphertext_len);
+            IF_IO_ERROR(result, nullptr);
+            msg = new Message();
+            msg->setType(USERS_LIST);
+            msg->setSender(sender);
+            msg->setSequenceN(sequence_number);
+            msg->setIv(iv);
+            msg->getPayload()->setAuthTag(auth_tag);
+            msg->getPayload()->setCiphertext(ciphertext);
+            msg->setCTxtLen(ciphertext_len);
             break;
         case ERROR:
             result = SocketManager::read_string(socket, error_message);
@@ -948,15 +1010,23 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
     OPENSSL_FAIL(bio,"allocating bio stream message to bytes failed",0)
     switch (message->getType()) {
         case REQUEST_TO_TALK:
-          not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
-          OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
-          not_used = BIO_write(bio,message->getRecipient().c_str(),message->getRecipient().length());
-          OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
-          not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
-          OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
-          not_used = BIO_write(bio,message->getIv(),IV_LEN);
-          OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
-          break;
+            not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getRecipient().c_str(),message->getRecipient().length());
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getIv(),IV_LEN);
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            break;
+        case USERS_LIST:
+            not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getIv(),IV_LEN);
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            break;
         default:
             break;
     }

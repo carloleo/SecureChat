@@ -15,8 +15,8 @@ void usage();
 int authenticate_to_server(int server_socket,string username,string &online_users);
 int verify_cert(X509*);
 int prepare_third_message(EVP_PKEY*,Message*);
-int read_encrypted_message(int socket,uint32_t sequence_number,string &message);
-enum COMMAND{TALK,QUIT,LOGOUT};
+int read_encrypted_message(int socket,uint32_t sequence_number,string &message, unsigned char* key);
+enum COMMAND{TALK,QUIT,LOGOUT,LIST};
 static std::map<std::string ,COMMAND> commands;
 //receive it to server
 uint32_t server_in_sn = 0;
@@ -81,7 +81,7 @@ int authenticate_to_server(int server_socket, string username, string &online_us
     IF_MANAGER_FAILED(result,"prepare third message failed",0)
     result = SocketManager::send_message(server_socket,third_message);
     IF_MANAGER_FAILED(result,"sending third message failed",0)
-    result = read_encrypted_message(server_socket,server_in_sn, online_users);
+    result = read_encrypted_message(server_socket,server_in_sn, online_users,sever_session_key);
     IF_MANAGER_FAILED(result,"reading last handshake message failed",0)
     delete second_message;
     delete third_message;
@@ -139,7 +139,7 @@ int prepare_third_message(EVP_PKEY* eph_pub_key,Message* msg){
     delete to_sign;
     return 1;
 }
-int read_encrypted_message(int socket,uint32_t sequence_number,string &message){
+int read_encrypted_message(int socket,uint32_t sequence_number,string &message, unsigned  char* key){
     Message* data = SocketManager::read_message(socket);
     //if not expected sequence number return: reply attack
     if(sequence_number != data->getSequenceN())
@@ -151,8 +151,7 @@ int read_encrypted_message(int socket,uint32_t sequence_number,string &message){
     NEW(plaintext,new unsigned  char [data->getCTxtLen()],"plaintext")
     pt_len = CryptoManager::gcm_decrypt(data->getPayload()->getCiphertext(),data->getCTxtLen(),
                                         aad,4,data->getPayload()->getAuthTag(),
-                                        sever_session_key,data->getIv(),IV_LEN,plaintext);
-
+                                        key,data->getIv(),IV_LEN,plaintext);
     if(pt_len > 0)
         plaintext[pt_len-1] = '\0';
     message = (string) (char*)plaintext;

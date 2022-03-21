@@ -27,6 +27,7 @@ int main(){
     commands["talk"] = TALK;
     commands["quit"] = QUIT;
     commands["logout"] = LOGOUT;
+    commands["list"] = LIST;
     cout << "type your username: " << endl;
     cin >> username;
     ISNOT(cin,"Ooops! something went wrong")
@@ -52,11 +53,16 @@ int main(){
         exit(EXIT_FAILURE);
     }
     while (!done){
-        cout << "Type command" << endl;
-        cin >> command;
+        int not_used;
         string recipient;
         Message message;
         Message* reply;
+        unsigned char* iv;
+        unsigned char* tag;
+        unsigned char* aad;
+        size_t len;
+        cout << "Type command" << endl;
+        cin >> command;
         switch (commands[command]) {
             case TALK:
                 cout << "select the recipient among online users" << endl;
@@ -69,14 +75,11 @@ int main(){
                     message.setSender(username);
                     message.setRecipient(recipient);
                     message.setSequenceN(server_out_sn);
-                    unsigned char* iv;
                     iv = CryptoManager::generate_iv();
                     IF_MANAGER_FAILED(iv,"generating iv failed",1)
                     message.setIv(iv);
                     //authenticate request
-                    unsigned char* tag;
                     NEW(tag,new unsigned char[TAG_LEN],"allocating tag")
-                    unsigned char* aad = uint32_to_bytes(server_out_sn);
                     size_t len = CryptoManager::message_to_bytes(&message,&aad);
                     not_used = CryptoManager::authenticate_data(aad,
                                                                 len,iv,sever_session_key,tag);
@@ -93,8 +96,36 @@ int main(){
             case LOGOUT:
                 done = true;
                 break;
+            case LIST:
+                message.setType(USERS_LIST);
+                message.setSender(username);
+                message.setSequenceN(server_out_sn);
+                iv = CryptoManager::generate_iv();
+                IF_MANAGER_FAILED(iv,"generating iv failed",1)
+                message.setIv(iv);
+                //authenticate request
+                NEW(tag,new unsigned char[TAG_LEN],"allocating tag")
+                len = CryptoManager::message_to_bytes(&message,&aad);
+                not_used = CryptoManager::authenticate_data(aad,
+                                                            len,iv,sever_session_key,tag);
+                IF_MANAGER_FAILED(not_used,"Authenticate data failed",1)
+                message.getPayload()->setAuthTag(tag);
+                not_used = SocketManager::send_message(server_socket,&message);
+                IF_MANAGER_FAILED(not_used,"Sending request to talk",1)
+                server_out_sn += 1;
+                delete aad;
+                //read list
+                online_users.clear();
+                not_used = read_encrypted_message(server_socket,server_in_sn,online_users,sever_session_key);
+                IF_MANAGER_FAILED(not_used,"reading users online list failed",1);
+                server_in_sn += 1;
+                cout << "USERS ONLINE: " << endl;
+                cout << online_users << endl;
+                break;
+                //TODO make a function to send authenticate request
             default:
                 cerr << "invalid command" << endl;
+                break;
         }
     }
     close(server_socket);

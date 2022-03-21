@@ -100,8 +100,10 @@ std::string Session::get_online_users() {
     string username;
     auto usr = users.begin();
     while(usr != users.end()){
-        username = usr->second->getUserName();
-        users_online.append(username + " ");
+        if(usr->second->isOnline()) {
+            username = usr->second->getUserName();
+            users_online.append(username + " ");
+        }
         usr++;
     }
     return users_online;

@@ -19,6 +19,7 @@ vector<string> parse_line(string line);
 EVP_PKEY* read_public_key(string username);
 int manage_message(int socket, Message* message);
 void disconnect_client(int socket,fd_set* client_set,int* fd_num);
+int check_client_message(Message* message);
 
 //global
 Session* session;
@@ -278,20 +279,23 @@ int manage_message(int socket, Message* message){
             delete to_verify;
             break;
         case REQUEST_TO_TALK:
-            username_sender = message->getSender();
-            sender = session->get_user(username_sender);
-            //wrong sequence number
-            if(message->getSequenceN() != sender->getSnUser())
-                return 0;
-            iv = message->getIv();
-            IF_MANAGER_FAILED(iv,"request to talk generating iv",0)
-            len = CryptoManager::message_to_bytes(message,&aad);
-            result = CryptoManager::verify_auth_data(aad,len,iv,sender->getSessionKey(),
-                                            message->getPayload()->getAuthTag());
-            IF_MANAGER_FAILED(result,"request to talk verifying tag",0)
-            sender->increment_user_sn();
+            result = check_client_message(message);
+            cerr << "check result " << result << endl;
             // TODO: forward request to talk
             delete aad;
+            break;
+        case USERS_LIST:
+            result = check_client_message(message);
+            cerr << "check result " << result << endl;
+            if(!result)
+                return result;
+            online_users = session->get_online_users();
+            sender = session->get_user(username_sender);
+            result = SocketManager::send_encrypted_message(sender->getSocket(),sender->getSnServer(),
+                                                           sender->getSessionKey(),online_users,USERS_LIST_RESPONSE);
+            IF_MANAGER_FAILED(result,"sending users list failed",0)
+            sender->increment_server_sn();
+
             break;
         default:
             cerr << "wrong type!!" << endl;
@@ -310,5 +314,26 @@ void disconnect_client(int socket,fd_set* client_set,int* fd_num){
     session->disconnect_client(socket);
     close(socket);
     cout << "Client done!!" << endl;
+}
+
+int check_client_message(Message* message){
+    string username_sender = message->getSender();
+    User* sender = session->get_user(username_sender);
+    unsigned char* iv;
+    unsigned char* aad;
+    int result = 0;
+    size_t len;
+    //wrong sequence number
+    if(message->getSequenceN() != sender->getSnUser())
+        return 0;
+    iv = message->getIv();
+    len = CryptoManager::message_to_bytes(message,&aad);
+    IF_MANAGER_FAILED(len,"check_client_message obtaining aad failed",result);
+    result = CryptoManager::verify_auth_data(aad,len,iv,sender->getSessionKey(),
+                                             message->getPayload()->getAuthTag());
+    IF_MANAGER_FAILED(result,"check_client_message verifying tag",0)
+    sender->increment_user_sn();
+    delete aad;
+    return result;
 }
 
