@@ -54,6 +54,8 @@ void Session::disconnect_client(int socket) {
             usr->second->deleteSessionKey();
             //ephemeral keys
             destroy_ephemeral_keys(username);
+            usr->second->setSnUser(0);
+            usr->second->setSnServer(0);
             done = true;
         }
         usr++;

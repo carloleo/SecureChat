@@ -158,20 +158,27 @@ int Managers::SocketManager::send_encrypted_message(int socket, uint32_t sequenc
     unsigned char* ciphertext;
     uint32_t cipher_len;
     int result = 0;
-    unsigned char* aad= uint32_to_bytes(sequence_number);
-    unsigned char* iv = CryptoManager::generate_iv();
-    size_t plain_size = body.length();
+    unsigned char* aad;
+    unsigned char* iv;
+    size_t aad_len;
+    iv = CryptoManager::generate_iv();
+    IF_MANAGER_FAILED(iv,"send_encrypted_message generating iv failed",0)
+    size_t plain_size;
+    plain_size = body.length();
     NEW(auth_tag,new unsigned  char [TAG_LEN],"auth_tag")
     NEW(ciphertext, new unsigned  char[plain_size],"ciphertext")
-    cipher_len = CryptoManager::gcm_encrypt((unsigned char*)body.c_str(),plain_size,
-                                            aad,4,session_key,
-                                            iv,4,ciphertext,auth_tag);
-    IF_MANAGER_FAILED(cipher_len,"encrypting last handshake message failed",0)
-    Message* message = new Message();
     //prepare message
+    Message* message = new Message();
     message->setType(type);
     message->setSequenceN(sequence_number);
     message->setIv(iv);
+    //get additional authentication data
+    aad_len = CryptoManager::message_to_bytes(message,&aad);
+    cipher_len = CryptoManager::gcm_encrypt((unsigned char*)body.c_str(),plain_size,
+                                            aad,aad_len,session_key,
+                                            iv,IV_LEN,ciphertext,auth_tag);
+    IF_MANAGER_FAILED(cipher_len,"encrypting last handshake message failed",0)
+    //add encryption fields
     message->setCTxtLen(cipher_len);
     message->getPayload()->setCiphertext(ciphertext);
     message->getPayload()->setAuthTag(auth_tag);
@@ -466,7 +473,7 @@ Message* Managers::SocketManager::read_message(int socket){
             result = SocketManager::read_data(socket,&ciphertext,&ciphertext_len);
             IF_IO_ERROR(result, nullptr);
             msg = new Message();
-            msg->setType(USERS_LIST);
+            msg->setType(USERS_LIST_RESPONSE);
             msg->setSender(sender);
             msg->setSequenceN(sequence_number);
             msg->setIv(iv);
@@ -561,11 +568,11 @@ int Managers::CryptoManager::gcm_decrypt(unsigned char *ciphertext, int cipherte
     EVP_CIPHER_CTX_free(ctx);
 
     if(not_used > 0) {
-        /* Success */
+        //data authenticated
         plaintext_len += len;
         return plaintext_len;
     } else {
-        /* Verify failed */
+        //tag mismatch
         return 0;
     }
 }
@@ -1027,6 +1034,11 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             break;
+        case USERS_LIST_RESPONSE:
+            not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getIv(),IV_LEN);
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
         default:
             break;
     }

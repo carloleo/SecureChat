@@ -142,16 +142,21 @@ int prepare_third_message(EVP_PKEY* eph_pub_key,Message* msg){
 int read_encrypted_message(int socket,uint32_t sequence_number,string &message, unsigned  char* key){
     Message* data = SocketManager::read_message(socket);
     //if not expected sequence number return: reply attack
+    cerr << sequence_number << "  " << data->getSequenceN() <<endl;
     if(sequence_number != data->getSequenceN())
         return 0;
 
     unsigned char* plaintext;
-    unsigned char* aad = uint32_to_bytes(sequence_number);
+    unsigned char* aad;
+    size_t aad_size;
+    //get additional authentication data
+    aad_size = CryptoManager::message_to_bytes(data,&aad);
     int pt_len;
-    NEW(plaintext,new unsigned  char [data->getCTxtLen()],"plaintext")
+    NEW(plaintext, new unsigned  char[data->getCTxtLen()],"plaintext")
     pt_len = CryptoManager::gcm_decrypt(data->getPayload()->getCiphertext(),data->getCTxtLen(),
-                                        aad,4,data->getPayload()->getAuthTag(),
+                                        aad,aad_size, data->getPayload()->getAuthTag(),
                                         key,data->getIv(),IV_LEN,plaintext);
+    //message authenticated
     if(pt_len > 0)
         plaintext[pt_len-1] = '\0';
     message = (string) (char*)plaintext;

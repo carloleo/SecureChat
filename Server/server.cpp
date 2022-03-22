@@ -52,7 +52,7 @@ int main() {
     int fd_num = master_socket;
     while (true){
         read_set = client_set;
-        cout << "Sleep on select" <<endl;
+        //cout << "Sleep on select" <<endl;
         not_used = select(fd_num + 1,&read_set, nullptr, nullptr, nullptr);
         ISLESSTHANZERO(not_used,"select failed")
         //find the ready socket
@@ -275,6 +275,7 @@ int manage_message(int socket, Message* message){
             //encrypt message
             result = SocketManager::send_encrypted_message(socket,sender->getSnServer(),session_key,
                                                            online_users,AUTH_KEY_EXCHANGE_RESPONSE);
+            IF_MANAGER_FAILED(result,"sending last handshake failed",0);
             sender->increment_server_sn();
             delete to_verify;
             break;
@@ -282,11 +283,9 @@ int manage_message(int socket, Message* message){
             result = check_client_message(message);
             cerr << "check result " << result << endl;
             // TODO: forward request to talk
-            delete aad;
             break;
         case USERS_LIST:
             result = check_client_message(message);
-            cerr << "check result " << result << endl;
             if(!result)
                 return result;
             online_users = session->get_online_users();
@@ -295,7 +294,6 @@ int manage_message(int socket, Message* message){
                                                            sender->getSessionKey(),online_users,USERS_LIST_RESPONSE);
             IF_MANAGER_FAILED(result,"sending users list failed",0)
             sender->increment_server_sn();
-
             break;
         default:
             cerr << "wrong type!!" << endl;
