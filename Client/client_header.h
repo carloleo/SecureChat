@@ -4,6 +4,10 @@
 #include  <unistd.h>
 #include <iostream>
 #include <map>
+#include <mutex>
+#include <vector>
+#include <csignal>
+#include <thread>
 #include "../Managers/managers.h"
 #define CERT_DIR (string )"../Client/Certs/"
 #define CA_CERT (string) "CA.pem"
@@ -16,8 +20,16 @@ int authenticate_to_server(int server_socket,string username,string &online_user
 int verify_cert(X509*);
 int prepare_third_message(EVP_PKEY*,Message*);
 int read_encrypted_message(int socket,uint32_t sequence_number,string &message, unsigned char* key);
+//cli interface
 enum COMMAND{TALK,QUIT,LOGOUT,LIST};
 static std::map<std::string ,COMMAND> commands;
+void listener(int socket,pthread_t main_tid);
+int decrypt_message(Message* data, unsigned char* key, string &message);
+std::mutex m_lock;
+std::vector<Message*> messages_queue;
+volatile sig_atomic_t flag = 0;
+void handler(int signum);
+
 //receive it to server
 uint32_t server_in_sn = 0;
 //send it to server
@@ -142,10 +154,14 @@ int prepare_third_message(EVP_PKEY* eph_pub_key,Message* msg){
 int read_encrypted_message(int socket,uint32_t sequence_number,string &message, unsigned  char* key){
     Message* data = SocketManager::read_message(socket);
     //if not expected sequence number return: reply attack
-    cerr << sequence_number << "  " << data->getSequenceN() <<endl;
     if(sequence_number != data->getSequenceN())
         return 0;
+    int result;
+    result = decrypt_message(data, key, message);
+    return result;
+}
 
+int decrypt_message(Message* data, unsigned char* key, string &message){
     unsigned char* plaintext;
     unsigned char* aad;
     size_t aad_size;
@@ -164,4 +180,49 @@ int read_encrypted_message(int socket,uint32_t sequence_number,string &message, 
     delete aad;
     delete plaintext;
     return pt_len > 0;
+
+}
+
+void listener(int socket,pthread_t main_tid){
+    bool done  = false;
+    Message* message;
+    string message_text;
+    int not_used = 0;
+    cout << "listening thread starts" << endl;
+    while(!done){
+        message = SocketManager::read_message(socket);
+        if(!message){
+            cout << "Disconnecting..." << endl;
+            done = true;
+        }
+        m_lock.lock();
+        try{
+            messages_queue.push_back(message);
+            switch (message->getType()) {
+                case USERS_LIST_RESPONSE:
+                    not_used = decrypt_message(message,sever_session_key, message_text);
+                    if(!not_used){
+                        cerr << "Decryption went wrong !" << endl;
+                        exit(EXIT_FAILURE);
+
+                    }
+                    cout << "USER LIST" << endl;
+                    cout << message_text << endl;
+                    server_in_sn += 1;
+                    break;
+                case DATA:
+                    break;
+                default:
+                    break;
+            }
+        }
+        catch (bad_alloc &e){
+            cerr << "Process ends because of it gets out of memory" << endl;
+            exit(EXIT_SUCCESS);
+        }
+        catch (...){}
+        m_lock.unlock();
+    }
+    close(socket);
+    pthread_exit(nullptr);
 }

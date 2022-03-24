@@ -474,7 +474,6 @@ Message* Managers::SocketManager::read_message(int socket){
             IF_IO_ERROR(result, nullptr);
             msg = new Message();
             msg->setType(USERS_LIST_RESPONSE);
-            msg->setSender(sender);
             msg->setSequenceN(sequence_number);
             msg->setIv(iv);
             msg->getPayload()->setAuthTag(auth_tag);

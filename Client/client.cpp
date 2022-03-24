@@ -52,6 +52,10 @@ int main(){
         close(server_socket);
         exit(EXIT_FAILURE);
     }
+    //install handler and instantiate thread to read messages from server
+    //signal(SIGUSR1,handler);
+    std::thread t1 (listener,server_socket,pthread_self());
+
     while (!done){
         int not_used;
         string recipient;
@@ -114,13 +118,6 @@ int main(){
                 IF_MANAGER_FAILED(not_used,"Sending request to talk",1)
                 server_out_sn += 1;
                 delete aad;
-                //read list
-                online_users.clear();
-                not_used = read_encrypted_message(server_socket,server_in_sn,online_users,sever_session_key);
-                IF_MANAGER_FAILED(not_used,"reading users online list failed",1);
-                server_in_sn += 1;
-                cout << "USERS ONLINE: " << endl;
-                cout << online_users << endl;
                 break;
                 //TODO make a function to send authenticate request
             default:
@@ -128,7 +125,7 @@ int main(){
                 break;
         }
     }
-    close(server_socket);
+    t1.detach();
     EVP_PKEY_free(pvt_client_key);
     return  0;
 }
