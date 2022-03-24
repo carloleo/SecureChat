@@ -13,6 +13,7 @@ private:
     std::string user_name;
     unsigned char* session_key = nullptr;
     bool is_online;
+    bool is_busy;
     int socket;
     EVP_PKEY* public_key = nullptr;
     uint32_t sn_user; //sequence numbers
@@ -23,6 +24,8 @@ public:
     void setIsOnline(bool isOnline);
     void setSocket(int socket);
     void setPublicKey(EVP_PKEY *publicKey);
+
+    void setIsBusy(bool isBusy);
 
     void setSnUser(uint32_t snUser);
 
@@ -39,6 +42,9 @@ public:
     EVP_PKEY *getPublicKey() const;
     uint32_t getSnUser() const;
     uint32_t getSnServer() const;
+
+    bool isBusy() const;
+
     void increment_server_sn();
     void increment_user_sn();
 };

@@ -52,10 +52,9 @@ int main(){
         close(server_socket);
         exit(EXIT_FAILURE);
     }
-    //install handler and instantiate thread to read messages from server
-    //signal(SIGUSR1,handler);
+    //instantiate thread to read messages from server
     std::thread t1 (listener,server_socket,pthread_self());
-
+    cout << "Users online" << online_users << endl;
     while (!done){
         int not_used;
         string recipient;
@@ -69,11 +68,12 @@ int main(){
         cin >> command;
         switch (commands[command]) {
             case TALK:
-                cout << "select the recipient among online users" << endl;
-                cout << online_users << endl;
+                cout << "type the recipient's username" << endl;
                 cin >> recipient;
-                if(online_users.find(recipient) == std::string::npos)
-                    cerr <<"wrong username" << endl;
+                if(online_users.find(recipient) == std::string::npos) {
+                    cerr << "username is not online" << endl;
+                    cout << "type 'list' to show the updated list" << endl;
+                }
                 else{
                     message.setType(REQUEST_TO_TALK);
                     message.setSender(username);

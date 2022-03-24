@@ -77,3 +77,11 @@ void User::setSnUser(uint32_t snUser) {
 void User::setSnServer(uint32_t snServer) {
     sn_server = snServer;
 }
+
+void User::setIsBusy(bool isBusy) {
+    is_busy = isBusy;
+}
+
+bool User::isBusy() const {
+    return is_busy;
+}

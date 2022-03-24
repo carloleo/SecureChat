@@ -28,7 +28,6 @@ int decrypt_message(Message* data, unsigned char* key, string &message);
 std::mutex m_lock;
 std::vector<Message*> messages_queue;
 volatile sig_atomic_t flag = 0;
-void handler(int signum);
 
 //receive it to server
 uint32_t server_in_sn = 0;
@@ -184,33 +183,44 @@ int decrypt_message(Message* data, unsigned char* key, string &message){
 }
 
 void listener(int socket,pthread_t main_tid){
-    bool done  = false;
     Message* message;
     string message_text;
-    int not_used = 0;
-    cout << "listening thread starts" << endl;
-    while(!done){
+    int result = 0;
+    unsigned char *aad = nullptr;
+    size_t aad_len = 0;
+    while(true){
         message = SocketManager::read_message(socket);
         if(!message){
             cout << "Disconnecting..." << endl;
-            done = true;
+            break;
         }
-        m_lock.lock();
         try{
             messages_queue.push_back(message);
             switch (message->getType()) {
                 case USERS_LIST_RESPONSE:
-                    not_used = decrypt_message(message,sever_session_key, message_text);
-                    if(!not_used){
+                    result = decrypt_message(message, sever_session_key, message_text);
+                    if(!result){
                         cerr << "Decryption went wrong !" << endl;
                         exit(EXIT_FAILURE);
 
                     }
-                    cout << "USER LIST" << endl;
+                    cout << "USERS LIST" << endl;
                     cout << message_text << endl;
                     server_in_sn += 1;
                     break;
-                case DATA:
+                case REQUEST_TO_TALK:
+                    aad_len = CryptoManager::message_to_bytes(message,&aad);
+                    result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
+                                                             message->getPayload()->getAuthTag());
+                    if(result) {
+                        cout << "You have just received a REQUEST TO TALK form: " << message->getSender() << endl;
+                        cout << "to accept type 'accept', to reject type 'reject' " << endl;
+                        m_lock.lock();
+                        messages_queue.push_back(message);
+                        m_lock.unlock();
+                        server_in_sn += 1;
+                    } //TODO: manage authentication error
+                    delete aad;
                     break;
                 default:
                     break;
@@ -220,8 +230,11 @@ void listener(int socket,pthread_t main_tid){
             cerr << "Process ends because of it gets out of memory" << endl;
             exit(EXIT_SUCCESS);
         }
-        catch (...){}
-        m_lock.unlock();
+        catch (...){
+            m_lock.unlock();
+        }
+
+        delete message;
     }
     close(socket);
     pthread_exit(nullptr);

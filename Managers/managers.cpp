@@ -189,6 +189,23 @@ int Managers::SocketManager::send_encrypted_message(int socket, uint32_t sequenc
     IF_MANAGER_FAILED(result,"sending last handshake message failed",0)
     return result;
 }
+int Managers::SocketManager::send_authenticated_message(int socket, Message *message, unsigned char* key) {
+    unsigned char* aad = nullptr;
+    unsigned char* tag = nullptr;
+    size_t aad_size;
+    int not_used = 0;
+    //iv set into message
+    aad_size = Managers::CryptoManager::message_to_bytes(message, &aad);
+    IF_MANAGER_FAILED(aad_size,"send_authenticated_message getting aad failed",0)
+    NEW(tag,new unsigned char[TAG_LEN],"send_authenticated_message allocating tag")
+    not_used = CryptoManager::authenticate_data(aad,aad_size,message->getIv(),key,tag);
+    IF_MANAGER_FAILED(not_used,"send_authenticated_message failed",0)
+    message->getPayload()->setAuthTag(tag);
+    not_used = SocketManager::send_message(socket, message);
+    IF_MANAGER_FAILED(aad_size,"send_authenticated_message sending message failed",0)
+    return 1;
+
+}
 int Managers::SocketManager::read_public_key(int socket, EVP_PKEY **pubkey) {
     int result;
     unsigned char* pub_key_buff = NULL;

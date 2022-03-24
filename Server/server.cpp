@@ -101,6 +101,7 @@ Session* configure_server(void){
             User* user;
             NEW(user,new User(),"user")
             user->setUserName(username);
+            cout << username << endl;
             EVP_PKEY* pub_key = read_public_key(username);
             user->setPublicKey(pub_key);
             session->add_user(user);
@@ -155,6 +156,7 @@ EVP_PKEY* read_public_key(string username){
 int manage_message(int socket, Message* message){
     string username_sender = message->getSender();
     User* sender;
+    User* recipient;
     Message *reply;
     uint32_t signature_size =0;
     EVP_PKEY * eph_pubkey;
@@ -181,6 +183,7 @@ int manage_message(int socket, Message* message){
     size_t len;
     int cipher_len = 0;
     NEW(reply,new Message(),"reply")
+    //TODO: MANAGE ERROR MESSAGES
     switch (message->getType()) {
         case AUTH_REQUEST:
             if(!session->is_registered(username_sender)){
@@ -281,8 +284,22 @@ int manage_message(int socket, Message* message){
             break;
         case REQUEST_TO_TALK:
             result = check_client_message(message);
-            cerr << "check result " << result << endl;
-            // TODO: forward request to talk
+            if(!result)
+                return result;
+            sender = session->get_user(username_sender);
+            recipient = session->get_user(message->getRecipient());
+            iv = CryptoManager::generate_iv();
+            //free because they will be replaced
+            delete message->getIv();
+            delete message->getPayload()->getAuthTag();
+            message->setIv(iv);
+            message->setSequenceN(recipient->getSnServer());
+            result = SocketManager::send_authenticated_message(recipient->getSocket(),message,
+                                                               recipient->getSessionKey());
+            //until the request gets closed they will be busy
+            recipient->setIsBusy(true);
+            sender->setIsBusy(true);
+            recipient->increment_server_sn();
             break;
         case USERS_LIST:
             result = check_client_message(message);
