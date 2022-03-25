@@ -186,7 +186,8 @@ int manage_message(int socket, Message* message){
     //TODO: MANAGE ERROR MESSAGES
     switch (message->getType()) {
         case AUTH_REQUEST:
-            if(!session->is_registered(username_sender)){
+            if(!session->is_registered(username_sender) or
+                    session->get_user(username_sender)->isOnline()){
                 cerr << "WRONG USERNAME" << endl;
                 return 0; //returns invalid username
             }
@@ -282,18 +283,35 @@ int manage_message(int socket, Message* message){
                 return result;
             sender = session->get_user(username_sender);
             recipient = session->get_user(message->getRecipient());
-            iv = CryptoManager::generate_iv();
-            //free because they will be replaced
-            delete message->getIv();
-            delete message->getPayload()->getAuthTag();
-            message->setIv(iv);
-            message->setSequenceN(recipient->getSnServer());
-            result = SocketManager::send_authenticated_message(recipient->getSocket(),message,
-                                                               recipient->getSessionKey());
-            //until the request gets closed they will be busy
-            recipient->setIsBusy(true);
-            sender->setIsBusy(true);
-            recipient->increment_server_sn();
+            result = false;
+            if(recipient->isOnline()) {
+                iv = CryptoManager::generate_iv();
+                //free because they will be replaced
+                delete message->getIv();
+                delete message->getPayload()->getAuthTag();
+                message->setIv(iv);
+                message->setSequenceN(recipient->getSnServer());
+                result = SocketManager::send_authenticated_message(recipient->getSocket(), message,
+                                                                   recipient->getSessionKey());
+                //until the request gets closed they will be busy
+                if(result) {
+                    recipient->setIsBusy(true);
+                    sender->setIsBusy(true);
+                    recipient->increment_server_sn();
+                    session->open_chat(recipient->getUserName(),sender->getUserName());
+                }
+            }
+            //forwarding request to talk failed
+            if(!result){
+                iv = CryptoManager::generate_iv();
+                reply->setType(ERROR);
+                reply->setErrCode(FORWARD_REQUEST_FAIL);
+                reply->setIv(iv);
+                reply->setSequenceN(sender->getSnServer());
+                result = SocketManager::send_authenticated_message(sender->getSocket(),
+                                                                   reply,sender->getSessionKey());
+                IF_MANAGER_FAILED(result,"REQUEST_OK sending forward error failed",0);
+            }
             break;
         case REQUEST_OK:
             //check authenticity
@@ -302,29 +320,55 @@ int manage_message(int socket, Message* message){
                 return result;
             sender = session->get_user(username_sender);
             recipient = session->get_user(message->getRecipient());
-            iv = CryptoManager::generate_iv();
-            //owner public key
-            reply->setSender(username_sender);
-            reply->setType(REQUEST_KO);
-            reply->getPayload()->setPubKey(sender->getPublicKey());
-            reply->setIv(iv);
-            reply->setSequenceN(recipient->getSnServer());
-            result = SocketManager::send_authenticated_message(recipient->getSocket(),reply,
-                                                               recipient->getSessionKey());
-
-            if(result){
-                session->open_chat(recipient->getUserName(),sender->getUserName());
-                recipient->increment_server_sn();
+            result = false;
+            if(recipient->isOnline()) {
+                iv = CryptoManager::generate_iv();
+                IF_MANAGER_FAILED(iv, "REQUEST_OK generating iv failed", 0)
+                //owner public key
+                reply->setSender(username_sender);
+                reply->setType(PEER_PUB_KEY);
+                reply->getPayload()->setPubKey(sender->getPublicKey());
+                reply->setIv(iv);
+                reply->setSequenceN(recipient->getSnServer());
+                //sent target public key to requester of opening the conversation
+                result = SocketManager::send_authenticated_message(recipient->getSocket(), reply,
+                                                                   recipient->getSessionKey());
             }
+            //request to talk accepted
+            if(result){
+                //increment sequence number
+                recipient->increment_server_sn();
+                delete reply;
+                NEW(reply,new Message(),"REQUEST_OK allocating message failed")
+                iv = CryptoManager::generate_iv();
+                IF_MANAGER_FAILED(iv,"REQUEST_OK generating iv failed",0)
+                //owner public key
+                reply->setSender(recipient->getUserName());
+                reply->setType(PEER_PUB_KEY);
+                reply->getPayload()->setPubKey(recipient->getPublicKey());
+                reply->setIv(iv);
+                reply->setSequenceN(sender->getSnServer());
+                //sent requester public key to target of the conversation
+                result = SocketManager::send_authenticated_message(sender->getSocket(),reply,
+                                                                   sender->getSessionKey());
+                if(result){
+                    sender->increment_server_sn();
+
+                }
+
+            } //accepting of request to talk failed
             else{
                 //notify sender of REQUEST_OK
                 iv = CryptoManager::generate_iv();
                 reply->setType(ERROR);
-                reply->setErrCode(FORWARD_FAIL);
+                reply->setErrCode(FORWARD_ACCEPT_FAIL);
                 reply->setIv(iv);
                 reply->setSequenceN(sender->getSnServer());
                 result = SocketManager::send_authenticated_message(sender->getSocket(),
                                                                    reply,sender->getSessionKey());
+                IF_MANAGER_FAILED(result,"REQUEST_OK sending forward error failed",0);
+                sender->setIsBusy(false);
+                recipient->setIsBusy(false);
             }
             break;
         case REQUEST_KO:
@@ -334,19 +378,21 @@ int manage_message(int socket, Message* message){
                 return result;
             sender = session->get_user(username_sender);
             recipient = session->get_user(message->getRecipient());
-            iv = CryptoManager::generate_iv();
-            //free because they will be replaced
-            delete message->getIv();
-            delete message->getPayload()->getAuthTag();
-            message->setIv(iv);
-            message->setSequenceN(recipient->getSnServer());
-            result = SocketManager::send_authenticated_message(recipient->getSocket(),message,
-                                                               recipient->getSessionKey());
-            //request to talk rejected, now they can arrange other conversations
+            if(recipient->isOnline()) {
+                iv = CryptoManager::generate_iv();
+                //free because they will be replaced
+                delete message->getIv();
+                delete message->getPayload()->getAuthTag();
+                message->setIv(iv);
+                message->setSequenceN(recipient->getSnServer());
+                result = SocketManager::send_authenticated_message(recipient->getSocket(), message,
+                                                                   recipient->getSessionKey());
+                //request to talk rejected, now they can arrange other conversations
+                recipient->increment_server_sn();
+            }
+            //in case of errors in rejecting the request to talk the target user does not care to be informed
             recipient->setIsBusy(false);
             sender->setIsBusy(false);
-            recipient->increment_server_sn();
-
             break;
         case USERS_LIST:
             result = check_client_message(message);

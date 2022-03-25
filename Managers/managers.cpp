@@ -251,6 +251,7 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
     uint32_t len;
     uint32_t  sequence_number;
     unsigned char* iv;
+    int error_code;
     //send type
     tmp = msg->getType();
     result = SocketManager::write_n(socket,sizeof(int),(void*)&tmp);
@@ -357,7 +358,17 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
             IF_IO_ERROR(result,result)
             break;
         case ERROR:
-            result = SocketManager::write_string(socket,msg->getPayload()->getErrorMessage());
+            sequence_number = msg->getSequenceN();
+            result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result,result)
+            error_code = msg->getErrCode();
+            result = SocketManager::write_n(socket,sizeof(int),(void*) &error_code);
+            IF_IO_ERROR(result,result)
+            iv = msg->getIv();
+            result = SocketManager::send_data(socket,iv,IV_LEN);
+            IF_IO_ERROR(result,result);
+            result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
+            IF_IO_ERROR(result,result)
             break;
         default:
             break;
@@ -368,6 +379,7 @@ Message* Managers::SocketManager::read_message(int socket){
     int result;
     Message* msg = nullptr;
     int tmp;
+    int error_code;
     uint32_t nonce;
     uint32_t sequence_number;
     EVP_PKEY* pub_key = NULL;
@@ -473,7 +485,7 @@ Message* Managers::SocketManager::read_message(int socket){
             IF_IO_ERROR(result, nullptr)
             msg = new Message();
             msg->setType(type == REQUEST_TO_TALK ? REQUEST_TO_TALK :
-                                                    type == REQUEST_OK ? REQUEST_KO : REQUEST_KO);
+                                                    type == REQUEST_OK ? REQUEST_OK : REQUEST_KO);
             msg->setSender(sender);
             msg->setRecipient(recipient);
             msg->setIv(iv);
@@ -540,12 +552,23 @@ Message* Managers::SocketManager::read_message(int socket){
             msg->getPayload()->setPubKey(pub_key);
             break;
         case ERROR:
-            result = SocketManager::read_string(socket, error_message);
-            if(result){
-                NEW(msg,new Message(),"msg read_message")
-                msg->setType(ERROR);
-                msg->getPayload()->setErrorMessage(error_message);
-            }
+            //read sn
+            result = SocketManager::read_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result, nullptr)
+            result = SocketManager::read_n(socket, sizeof(int),(void*) &error_code);
+            IF_IO_ERROR(result, nullptr)
+            //read iv
+            result = SocketManager::read_data(socket,&iv,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read auth tag
+            result = SocketManager::read_data(socket,&auth_tag,&size);
+            IF_IO_ERROR(result, nullptr)
+            NEW(msg, new Message(),"read message allocating message failed")
+            msg->setType(ERROR);
+            msg->setErrCode((ERROR_CODE) error_code);
+            msg->getPayload()->setAuthTag(auth_tag);
+            msg->setSequenceN(sequence_number);
+            msg->setIv(iv);
             break;
         default:
             break;

@@ -58,7 +58,7 @@ void Session::disconnect_client(int socket) {
             usr->second->setSnServer(0);
             usr->second->setIsBusy(false);
             done = true;
-            //TODO: check if there are opened requests to talk
+            //TODO: check if there are opened requests to talk, case target user
         }
         usr++;
     }

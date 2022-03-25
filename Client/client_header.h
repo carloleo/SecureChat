@@ -185,7 +185,7 @@ int decrypt_message(Message* data, unsigned char* key, string &message){
     return pt_len > 0;
 
 }
-
+//TODO: peer to peer authentication and managing messages
 void listener(int socket,pthread_t main_tid){
     Message* message;
     string message_text;
@@ -194,7 +194,7 @@ void listener(int socket,pthread_t main_tid){
     size_t aad_len = 0;
     while(true){
         message = SocketManager::read_message(socket);
-        if(!message){
+        if(!message){ //TODO termination protocol
             cout << "Disconnecting..." << endl;
             break;
         }
@@ -250,11 +250,29 @@ void listener(int socket,pthread_t main_tid){
                                                              message->getPayload()->getAuthTag());
                     if(result){//authenticated data
                         server_in_sn += 1;
-                        cout << message->getSender() << "reject your request to talk" << endl;
+                        cout << message->getSender() << " rejected your request to talk" << endl;
                     }
                     else {
                         cerr << "Fatal authentication error" << endl;
                         exit(EXIT_FAILURE);
+                    }
+                    break;
+                case ERROR:
+                    aad_len = CryptoManager::message_to_bytes(message,&aad);
+                    result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
+                                                             message->getPayload()->getAuthTag());
+                    if(result){
+                        server_in_sn += 1;
+                        switch (message -> getErrCode()){
+                            case FORWARD_ACCEPT_FAIL:
+                                cerr << "Server unable to accept the request to talk. The request has been nullified" << endl;
+                                break;
+                            case FORWARD_REQUEST_FAIL:
+                                cerr << "Server unable to forward your request to talk." << endl;
+                                break;
+                            default:
+                                break;
+                        }
                     }
                     break;
                 default:

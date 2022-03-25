@@ -55,7 +55,7 @@ int main(){
     }
     //instantiate thread to read messages from server
     std::thread t1 (listener,server_socket,pthread_self());
-    cout << "Users online" << online_users << endl;
+    cout << "Users online: " << online_users << endl;
     while (!done){
         int not_used;
         bool recipient_offline = false;
@@ -72,6 +72,10 @@ int main(){
             case TALK:
                 cout << "type the recipient's username" << endl;
                 cin >> recipient;
+                if(username.compare(recipient) == 0){
+                    cerr << "cannot open a conversation with yourself" << endl;
+                    break;
+                }
                 m_online_users.lock();
                 recipient_offline = online_users.find(recipient) == std::string::npos;
                 m_online_users.unlock();
@@ -142,6 +146,7 @@ int main(){
                 if(!not_used)
                     cerr << "accepting request to talk from: " << request->getSender() << "failed. Try later" << endl;
                 else server_out_sn += 1;
+                //starts authentication with the peer
                 break;
             case REJECT:
                 cerr << "reject" << endl;

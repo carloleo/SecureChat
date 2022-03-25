@@ -59,7 +59,7 @@ Payload::~Payload() {
         delete ciphertext;
     if(auth_tag)
         delete auth_tag;
-    EVP_PKEY_free(pub_key);
+    //EVP_PKEY_free(pub_key);
 
 }
 
