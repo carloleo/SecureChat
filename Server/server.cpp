@@ -188,10 +188,7 @@ int manage_message(int socket, Message* message){
         case AUTH_REQUEST:
             if(!session->is_registered(username_sender)){
                 cerr << "WRONG USERNAME" << endl;
-                reply->setType(ERROR);
-                reply->getPayload()->setErrorMessage((string)"Invalid username");
-                SocketManager::send_message(socket,reply);
-                break; //returns invalid username
+                return 0; //returns invalid username
             }
 
             eph_pubkey = EVP_PKEY_new();
@@ -208,7 +205,7 @@ int manage_message(int socket, Message* message){
                     reply->setType(AUTH_RESPONSE);
                     reply->setSignatureLen(signature_size);
                     reply->getPayload()->setSignature(signature);
-                    reply->getPayload()->setTPubKey(eph_pubkey);
+                    reply->getPayload()->setPubKey(eph_pubkey);
                     reply->getPayload()->setCert(session->getServerCert());
                     result = SocketManager::send_message(socket,reply);
                     if(result){
@@ -226,11 +223,7 @@ int manage_message(int socket, Message* message){
             if(!session->is_in_handshake(message->getSender())){
                 delete message;
                 cerr << "NOT HANDSHAKE" << endl;
-                reply->setType(ERROR);
-                reply->getPayload()->setErrorMessage((string)"Invalid username");
-                SocketManager::send_message(socket,reply);
-                delete reply;
-                break; //user not in handshake
+                return 0;
             }
             encrypted_ms_size = message->getCTxtLen();
             encrypted_master_secret = message->getPayload()->getCiphertext();
@@ -283,6 +276,7 @@ int manage_message(int socket, Message* message){
             delete to_verify;
             break;
         case REQUEST_TO_TALK:
+            //check authenticity
             result = check_client_message(message);
             if(!result)
                 return result;
@@ -300,6 +294,59 @@ int manage_message(int socket, Message* message){
             recipient->setIsBusy(true);
             sender->setIsBusy(true);
             recipient->increment_server_sn();
+            break;
+        case REQUEST_OK:
+            //check authenticity
+            result = check_client_message(message);
+            if(!result)
+                return result;
+            sender = session->get_user(username_sender);
+            recipient = session->get_user(message->getRecipient());
+            iv = CryptoManager::generate_iv();
+            //owner public key
+            reply->setSender(username_sender);
+            reply->setType(REQUEST_KO);
+            reply->getPayload()->setPubKey(sender->getPublicKey());
+            reply->setIv(iv);
+            reply->setSequenceN(recipient->getSnServer());
+            result = SocketManager::send_authenticated_message(recipient->getSocket(),reply,
+                                                               recipient->getSessionKey());
+
+            if(result){
+                session->open_chat(recipient->getUserName(),sender->getUserName());
+                recipient->increment_server_sn();
+            }
+            else{
+                //notify sender of REQUEST_OK
+                iv = CryptoManager::generate_iv();
+                reply->setType(ERROR);
+                reply->setErrCode(FORWARD_FAIL);
+                reply->setIv(iv);
+                reply->setSequenceN(sender->getSnServer());
+                result = SocketManager::send_authenticated_message(sender->getSocket(),
+                                                                   reply,sender->getSessionKey());
+            }
+            break;
+        case REQUEST_KO:
+            //check authenticity
+            result = check_client_message(message);
+            if(!result)
+                return result;
+            sender = session->get_user(username_sender);
+            recipient = session->get_user(message->getRecipient());
+            iv = CryptoManager::generate_iv();
+            //free because they will be replaced
+            delete message->getIv();
+            delete message->getPayload()->getAuthTag();
+            message->setIv(iv);
+            message->setSequenceN(recipient->getSnServer());
+            result = SocketManager::send_authenticated_message(recipient->getSocket(),message,
+                                                               recipient->getSessionKey());
+            //request to talk rejected, now they can arrange other conversations
+            recipient->setIsBusy(false);
+            sender->setIsBusy(false);
+            recipient->increment_server_sn();
+
             break;
         case USERS_LIST:
             result = check_client_message(message);

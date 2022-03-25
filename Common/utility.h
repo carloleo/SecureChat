@@ -36,7 +36,8 @@
             }
 
 enum MESSAGE_TYPE{AUTH_REQUEST,AUTH_RESPONSE,AUTH_KEY_EXCHANGE,AUTH_KEY_EXCHANGE_RESPONSE,REQUEST_TO_TALK, REQUEST_OK,
-        REQUEST_KO,DATA,ERROR,USERS_LIST,USERS_LIST_RESPONSE};
+        REQUEST_KO,DATA,ERROR,USERS_LIST,USERS_LIST_RESPONSE, PEER_PUB_KEY};
+enum ERROR_CODE{FORWARD_FAIL};
 static inline unsigned char* uint32_to_bytes(uint32_t num){
     unsigned char* bytes;
     NEW(bytes,new unsigned char[sizeof(uint32_t)],"bytes")

@@ -20,8 +20,8 @@ uint32_t Payload::getNonce() const {
     return nonce;
 }
 
-EVP_PKEY *Payload::getTPubKey() const {
-    return t_pub_key;
+EVP_PKEY *Payload::getPubKey() const {
+    return pub_key;
 }
 
 X509 *Payload::getCert() const {
@@ -44,8 +44,8 @@ void Payload::setNonce(uint32_t nonce) {
     Payload::nonce = nonce;
 }
 
-void Payload::setTPubKey(EVP_PKEY *tPubKey) {
-    t_pub_key = tPubKey;
+void Payload::setPubKey(EVP_PKEY *tPubKey) {
+    pub_key = tPubKey;
 }
 
 void Payload::setCert(X509 *cert) {
@@ -59,7 +59,7 @@ Payload::~Payload() {
         delete ciphertext;
     if(auth_tag)
         delete auth_tag;
-    EVP_PKEY_free(t_pub_key);
+    EVP_PKEY_free(pub_key);
 
 }
 
@@ -75,6 +75,6 @@ Payload::Payload() {
     signature = nullptr;
     ciphertext = nullptr;
     auth_tag = nullptr;
-    t_pub_key = nullptr; //ephemeral public key
+    pub_key = nullptr; //ephemeral public key
     cert = nullptr; //certificate
 }

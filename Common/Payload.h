@@ -14,7 +14,7 @@ class Payload {
     unsigned char* auth_tag;
     std::string error_message;
     uint32_t nonce;
-    EVP_PKEY* t_pub_key; //ephemeral public key
+    EVP_PKEY* pub_key; //ephemeral public key or peer's public key
     X509* cert; //certificate
 public:
     Payload();
@@ -27,7 +27,7 @@ public:
 
     uint32_t getNonce() const;
 
-    EVP_PKEY *getTPubKey() const;
+    EVP_PKEY *getPubKey() const;
 
     X509 *getCert() const;
 
@@ -41,7 +41,7 @@ public:
 
     void setNonce(uint32_t nonce);
 
-    void setTPubKey(EVP_PKEY *tPubKey);
+    void setPubKey(EVP_PKEY *tPubKey);
 
     void setCert(X509 *cert);
 

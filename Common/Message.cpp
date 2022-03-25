@@ -47,8 +47,8 @@ Message::Message() {
     NEW(payload, new Payload(),"payload")
 }
 
-uint32_t Message::getTPkLen() const {
-    return t_pk_len;
+uint32_t Message::getPkLen() const {
+    return pk_len;
 }
 
 uint32_t Message::getCertLen() const {
@@ -63,8 +63,8 @@ uint32_t Message::getSequenceN() const {
     return sequence_n;
 }
 
-void Message::setTPkLen(uint32_t tPkLen) {
-    t_pk_len = tPkLen;
+void Message::setPkLen(uint32_t tPkLen) {
+    pk_len = tPkLen;
 }
 
 void Message::setCertLen(uint32_t certLen) {
@@ -93,5 +93,13 @@ unsigned char *Message::getIv() const {
 
 void Message::setIv(unsigned char *iv) {
     Message::iv = iv;
+}
+
+ERROR_CODE Message::getErrCode() const {
+    return err_code;
+}
+
+void Message::setErrCode(ERROR_CODE errCode) {
+    err_code = errCode;
 }
 

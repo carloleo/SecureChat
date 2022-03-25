@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 #include "User.h"
+#include "../../Common/Chat.h"
+
 using namespace std;
 class Session {
 private:
@@ -16,6 +18,8 @@ private:
     map<string,pair<EVP_PKEY*,EVP_PKEY*>> ephemeral_keys;
     EVP_PKEY* server_pvt_key;
     X509* server_cert;
+    //chats among clients
+    vector<Chat*> chats;
 public:
     User* get_user(std::string username);
     void add_user(User* user);
@@ -36,6 +40,9 @@ public:
     void setServerCert(X509 *serverCert);
 
     string get_online_users();
+
+    void open_chat(std::string requester, std::string target);
+
 
     ~Session();
 };

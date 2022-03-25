@@ -10,7 +10,6 @@ int main(){
     int not_used;
     struct sockaddr_in server_address;
     string  command;
-    string online_users;
     bool done = false;
     //TODO: parsing parameters
     //open socket
@@ -28,6 +27,8 @@ int main(){
     commands["quit"] = QUIT;
     commands["logout"] = LOGOUT;
     commands["list"] = LIST;
+    commands["accept"] = ACCEPT;
+    commands["reject"] = REJECT;
     cout << "type your username: " << endl;
     cin >> username;
     ISNOT(cin,"Ooops! something went wrong")
@@ -57,9 +58,10 @@ int main(){
     cout << "Users online" << online_users << endl;
     while (!done){
         int not_used;
+        bool recipient_offline = false;
         string recipient;
         Message message;
-        Message* reply;
+        Message* request;
         unsigned char* iv;
         unsigned char* tag;
         unsigned char* aad;
@@ -70,7 +72,10 @@ int main(){
             case TALK:
                 cout << "type the recipient's username" << endl;
                 cin >> recipient;
-                if(online_users.find(recipient) == std::string::npos) {
+                m_online_users.lock();
+                recipient_offline = online_users.find(recipient) == std::string::npos;
+                m_online_users.unlock();
+                if(recipient_offline) {
                     cerr << "username is not online" << endl;
                     cout << "type 'list' to show the updated list" << endl;
                 }
@@ -120,6 +125,43 @@ int main(){
                 delete aad;
                 break;
                 //TODO make a function to send authenticate request
+            case ACCEPT:
+                m_lock.lock();
+                request = messages_queue.back();
+                m_lock.unlock();
+                iv = CryptoManager::generate_iv();
+                IF_MANAGER_FAILED(iv,"getting iv failed",1)
+                message.setType(REQUEST_OK);
+                message.setIv(iv);
+                message.setSequenceN(server_out_sn);
+                //sender is who received the request to talk
+                message.setSender(request->getRecipient());
+                //recipient is who sent the request to talk
+                message.setRecipient(request->getSender());
+                not_used = SocketManager::send_authenticated_message(server_socket,&message,sever_session_key);
+                if(!not_used)
+                    cerr << "accepting request to talk from: " << request->getSender() << "failed. Try later" << endl;
+                else server_out_sn += 1;
+                break;
+            case REJECT:
+                cerr << "reject" << endl;
+                m_lock.lock();
+                request = messages_queue.back();
+                m_lock.unlock();
+                iv = CryptoManager::generate_iv();
+                IF_MANAGER_FAILED(iv,"getting iv failed",1)
+                message.setType(REQUEST_KO);
+                message.setIv(iv);
+                message.setSequenceN(server_out_sn);
+                //sender is who received the request to talk
+                message.setSender(request->getRecipient());
+                //recipient is who sent the request to talk
+                message.setRecipient(request->getSender());
+                not_used = SocketManager::send_authenticated_message(server_socket,&message,sever_session_key);
+                if(!not_used)
+                    cerr << "rejecting request to talk from: " << request->getSender() << "failed. Try later" << endl;
+                else server_out_sn += 1;
+                break;
             default:
                 cerr << "invalid command" << endl;
                 break;

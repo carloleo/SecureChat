@@ -112,3 +112,15 @@ std::string Session::get_online_users() {
     }
     return users_online;
 }
+
+void Session::open_chat(std::string requester, std::string target) {
+    Chat* chat;
+    try{
+        chat = new Chat();
+    }
+    catch (bad_alloc &e){
+        exit(EXIT_FAILURE);
+    }
+    chat->setRequesterPeer(requester);
+    chat->setTargetPeer(target);
+}

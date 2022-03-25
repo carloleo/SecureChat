@@ -14,7 +14,8 @@ class Message {
 private:
     //header
     MESSAGE_TYPE type;
-    uint32_t t_pk_len; //ephemeral public key length
+    ERROR_CODE err_code;
+    uint32_t pk_len; //ephemeral public key length
     uint32_t cert_len; // certificate length
     uint32_t c_txt_len; //ciphertext length
     uint32_t sequence_n; //sequence number
@@ -22,7 +23,6 @@ private:
     uint32_t signature_len;
     std::string sender;
     std::string recipient;
-    bool result;
     //payload
     Payload* payload;
 public:
@@ -39,7 +39,7 @@ public:
 
     Payload *getPayload() const;
 
-    uint32_t getTPkLen() const;
+    uint32_t getPkLen() const;
 
     uint32_t getCertLen() const;
 
@@ -51,6 +51,8 @@ public:
 
     unsigned char *getIv() const;
 
+    ERROR_CODE getErrCode() const;
+
 
     void setType(MESSAGE_TYPE type);
 
@@ -60,7 +62,7 @@ public:
 
     void setPayload(Payload *payload);
 
-    void setTPkLen(uint32_t tPkLen);
+    void setPkLen(uint32_t tPkLen);
 
     void setCertLen(uint32_t certLen);
 
@@ -71,6 +73,8 @@ public:
     void setSignatureLen(uint32_t signatureLen);
 
     void setIv(unsigned char *iv);
+
+    void setErrCode(ERROR_CODE errCode);
 
 
     virtual ~Message();

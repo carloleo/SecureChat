@@ -1,0 +1,17 @@
+//
+// Created by crl on 3/25/22.
+//
+
+#include "Chat.h"
+
+void Chat::setRequesterPeer(const std::string &requesterPeer) {
+    requester_peer = requesterPeer;
+}
+
+void Chat::setTargetPeer(const std::string &targetPeer) {
+    target_peer = targetPeer;
+}
+
+const std::string &Chat::getRequesterPeer() const {
+    return requester_peer;
+}

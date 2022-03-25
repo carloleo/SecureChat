@@ -21,14 +21,17 @@ int verify_cert(X509*);
 int prepare_third_message(EVP_PKEY*,Message*);
 int read_encrypted_message(int socket,uint32_t sequence_number,string &message, unsigned char* key);
 //cli interface
-enum COMMAND{TALK,QUIT,LOGOUT,LIST};
+enum COMMAND{TALK,QUIT,LOGOUT,LIST,ACCEPT,REJECT};
 static std::map<std::string ,COMMAND> commands;
 void listener(int socket,pthread_t main_tid);
 int decrypt_message(Message* data, unsigned char* key, string &message);
+//messages queue
 std::mutex m_lock;
+//users online
+std::mutex m_online_users;
 std::vector<Message*> messages_queue;
 volatile sig_atomic_t flag = 0;
-
+//GLOBAL
 //receive it to server
 uint32_t server_in_sn = 0;
 //send it to server
@@ -38,6 +41,7 @@ EVP_PKEY *pvt_client_key = nullptr;
 //session key
 unsigned char* sever_session_key = nullptr;
 string username;
+string online_users;
 
 int  verify_cert(X509* cert){
     X509* ca_cert = CryptoManager::open_certificate(CERT_DIR + CA_CERT);
@@ -77,7 +81,7 @@ int authenticate_to_server(int server_socket, string username, string &online_us
     cout << "result: " << (result == 1 ? "valid" : "wrong") << endl;
     EVP_PKEY* server_pub_key = X509_get_pubkey(server_cert);
 
-    EVP_PKEY* eph_pub_key = second_message->getPayload()->getTPubKey();
+    EVP_PKEY* eph_pub_key = second_message->getPayload()->getPubKey();
     unsigned char* signature = second_message->getPayload()->getSignature();
     uint32_t signature_length = second_message->getSignatureLen();
     //verify signature on ephemeral public key
@@ -195,7 +199,6 @@ void listener(int socket,pthread_t main_tid){
             break;
         }
         try{
-            messages_queue.push_back(message);
             switch (message->getType()) {
                 case USERS_LIST_RESPONSE:
                     result = decrypt_message(message, sever_session_key, message_text);
@@ -206,6 +209,11 @@ void listener(int socket,pthread_t main_tid){
                     }
                     cout << "USERS LIST" << endl;
                     cout << message_text << endl;
+                    //update users online list
+                    m_online_users.lock();
+                    online_users.clear();
+                    online_users.append(message_text);
+                    m_online_users.unlock();
                     server_in_sn += 1;
                     break;
                 case REQUEST_TO_TALK:
@@ -222,6 +230,33 @@ void listener(int socket,pthread_t main_tid){
                     } //TODO: manage authentication error
                     delete aad;
                     break;
+                case PEER_PUB_KEY:
+                    aad_len = CryptoManager::message_to_bytes(message,&aad);
+                    result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
+                                                             message->getPayload()->getAuthTag());
+                    if(result){//authenticated data
+                        server_in_sn += 1;
+                        cout << "PUB key got" << endl;
+                        //TODO authenticate peer
+                    }
+                    else{
+                        cerr << "Fatal authentication error" << endl;
+                        exit(EXIT_FAILURE);
+                    }
+                    break;
+                case REQUEST_KO:
+                    aad_len = CryptoManager::message_to_bytes(message,&aad);
+                    result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
+                                                             message->getPayload()->getAuthTag());
+                    if(result){//authenticated data
+                        server_in_sn += 1;
+                        cout << message->getSender() << "reject your request to talk" << endl;
+                    }
+                    else {
+                        cerr << "Fatal authentication error" << endl;
+                        exit(EXIT_FAILURE);
+                    }
+                    break;
                 default:
                     break;
             }
@@ -233,8 +268,6 @@ void listener(int socket,pthread_t main_tid){
         catch (...){
             m_lock.unlock();
         }
-
-        delete message;
     }
     close(socket);
     pthread_exit(nullptr);
