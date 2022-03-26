@@ -61,27 +61,39 @@ int main(){
         bool recipient_offline = false;
         string recipient;
         Message message;
-        Message* request;
+        Message* request  = nullptr;
         unsigned char* iv;
         unsigned char* tag;
         unsigned char* aad;
         size_t len;
         cout << "Type command" << endl;
         cin >> command;
+        ISNOT(cin,"error getting command")
+        trim(command);
+        if(!commands.count(command)){
+            cerr << "invalid command" << endl;
+            continue;
+        }
         switch (commands[command]) {
             case TALK:
+                if(is_talking){
+                    cerr << "You are already attending to a chat" << endl;
+                    break;
+                }
                 cout << "type the recipient's username" << endl;
                 cin >> recipient;
+                ISNOT(cin," ");
+                trim(recipient);
+                //yourself
                 if(username.compare(recipient) == 0){
                     cerr << "cannot open a conversation with yourself" << endl;
                     break;
                 }
-                m_online_users.lock();
-                recipient_offline = online_users.find(recipient) == std::string::npos;
-                m_online_users.unlock();
+                //check if recipient is online
+                recipient_offline = !is_online(recipient);
                 if(recipient_offline) {
                     cerr << "username is not online" << endl;
-                    cout << "type 'list' to show the updated list" << endl;
+                    cout << "type 'list' to updated the list" << endl;
                 }
                 else{
                     message.setType(REQUEST_TO_TALK);
@@ -102,9 +114,15 @@ int main(){
                     IF_MANAGER_FAILED(not_used,"Sending request to talk",1)
                     server_out_sn += 1;
                     delete aad;
+                    m_status.lock();
+                    is_talking = true;
+                    m_status.unlock();
                 }
                 break;
             case QUIT:
+                m_status.lock();
+                is_talking = false;
+                m_status.unlock();
                 break;
             case LOGOUT:
                 done = true;
@@ -131,8 +149,13 @@ int main(){
                 //TODO make a function to send authenticate request
             case ACCEPT:
                 m_lock.lock();
-                request = messages_queue.back();
+                if(!messages_queue.empty())
+                    request = messages_queue.back();
                 m_lock.unlock();
+                if(request == nullptr){
+                    cout << "Any pending request to be accepted" << endl;
+                    break;
+                }
                 iv = CryptoManager::generate_iv();
                 IF_MANAGER_FAILED(iv,"getting iv failed",1)
                 message.setType(REQUEST_OK);
@@ -149,10 +172,14 @@ int main(){
                 //starts authentication with the peer
                 break;
             case REJECT:
-                cerr << "reject" << endl;
                 m_lock.lock();
-                request = messages_queue.back();
+                if(!messages_queue.empty())
+                    request = messages_queue.back();
                 m_lock.unlock();
+                if(request == nullptr){
+                    cout << "Any pending request to be rejected" << endl;
+                    break;
+                }
                 iv = CryptoManager::generate_iv();
                 IF_MANAGER_FAILED(iv,"getting iv failed",1)
                 message.setType(REQUEST_KO);
@@ -165,7 +192,15 @@ int main(){
                 not_used = SocketManager::send_authenticated_message(server_socket,&message,sever_session_key);
                 if(!not_used)
                     cerr << "rejecting request to talk from: " << request->getSender() << "failed. Try later" << endl;
-                else server_out_sn += 1;
+                else{
+                    m_online_users.lock();
+                    online_users.erase(online_users.begin());
+                    m_online_users.unlock();
+                    server_out_sn += 1;
+                    m_status.lock();
+                    is_talking = false;
+                    m_status.unlock();
+                }
                 break;
             default:
                 cerr << "invalid command" << endl;

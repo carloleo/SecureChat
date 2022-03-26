@@ -8,6 +8,7 @@
 #include <vector>
 #include <csignal>
 #include <thread>
+#include <list>
 #include "../Managers/managers.h"
 #define CERT_DIR (string )"../Client/Certs/"
 #define CA_CERT (string) "CA.pem"
@@ -20,6 +21,8 @@ int authenticate_to_server(int server_socket,string username,string &online_user
 int verify_cert(X509*);
 int prepare_third_message(EVP_PKEY*,Message*);
 int read_encrypted_message(int socket,uint32_t sequence_number,string &message, unsigned char* key);
+inline std::string trim(std::string& str);
+bool  is_online(string username);
 //cli interface
 enum COMMAND{TALK,QUIT,LOGOUT,LIST,ACCEPT,REJECT};
 static std::map<std::string ,COMMAND> commands;
@@ -29,9 +32,12 @@ int decrypt_message(Message* data, unsigned char* key, string &message);
 std::mutex m_lock;
 //users online
 std::mutex m_online_users;
+std::mutex m_status;
+std::list<string> users;
 std::vector<Message*> messages_queue;
-volatile sig_atomic_t flag = 0;
+//volatile sig_atomic_t is_talking = 0;
 //GLOBAL
+bool is_talking = false;
 //receive it to server
 uint32_t server_in_sn = 0;
 //send it to server
@@ -42,6 +48,7 @@ EVP_PKEY *pvt_client_key = nullptr;
 unsigned char* sever_session_key = nullptr;
 string username;
 string online_users;
+
 
 int  verify_cert(X509* cert){
     X509* ca_cert = CryptoManager::open_certificate(CERT_DIR + CA_CERT);
@@ -176,9 +183,16 @@ int decrypt_message(Message* data, unsigned char* key, string &message){
                                         aad,aad_size, data->getPayload()->getAuthTag(),
                                         key,data->getIv(),IV_LEN,plaintext);
     //message authenticated
-    if(pt_len > 0)
-        plaintext[pt_len-1] = '\0';
-    message = (string) (char*)plaintext;
+    if(pt_len > 0) {
+       char* tmp;
+       //format the string
+       NEW(tmp, new char[pt_len + 1],"decrypt_message allocating tmp buffer failed");
+       memmove(tmp,plaintext,pt_len);
+       tmp[pt_len] = '\0';
+       message.append(tmp);
+       delete tmp;
+    }
+
     delete data;
     delete aad;
     delete plaintext;
@@ -192,6 +206,8 @@ void listener(int socket,pthread_t main_tid){
     int result = 0;
     unsigned char *aad = nullptr;
     size_t aad_len = 0;
+    string splitting = " ";
+    int index = -1;
     while(true){
         message = SocketManager::read_message(socket);
         if(!message){ //TODO termination protocol
@@ -213,6 +229,11 @@ void listener(int socket,pthread_t main_tid){
                     m_online_users.lock();
                     online_users.clear();
                     online_users.append(message_text);
+                    while((index = online_users.find(splitting)) != string::npos){
+                        users.push_back(online_users.substr(0,index));
+                        //remove last user and splitting char
+                        online_users.erase(0,index + splitting.length());
+                    }
                     m_online_users.unlock();
                     server_in_sn += 1;
                     break;
@@ -226,8 +247,11 @@ void listener(int socket,pthread_t main_tid){
                         m_lock.lock();
                         messages_queue.push_back(message);
                         m_lock.unlock();
+                        m_status.lock();
+                        is_talking = true;
+                        m_status.unlock();
                         server_in_sn += 1;
-                    } //TODO: manage authentication error
+                    }
                     delete aad;
                     break;
                 case PEER_PUB_KEY:
@@ -251,6 +275,9 @@ void listener(int socket,pthread_t main_tid){
                     if(result){//authenticated data
                         server_in_sn += 1;
                         cout << message->getSender() << " rejected your request to talk" << endl;
+                        m_status.lock();
+                        is_talking = false;
+                        m_status.unlock();
                     }
                     else {
                         cerr << "Fatal authentication error" << endl;
@@ -289,4 +316,22 @@ void listener(int socket,pthread_t main_tid){
     }
     close(socket);
     pthread_exit(nullptr);
+}
+
+inline std::string trim(std::string& str){
+    str.erase(str.find_last_not_of(' ')+1);         //suffixing spaces
+    str.erase(0, str.find_first_not_of(' '));     //prefixing spaces
+    return str;
+}
+
+bool is_online(string username){
+    m_online_users.lock();
+    auto it = users.begin();
+    bool found = false;
+    while(!found && it != users.end()) {
+        found = username.compare(*it) == 0;
+        it++;
+    }
+    m_online_users.unlock();
+    return found;
 }
