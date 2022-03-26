@@ -103,3 +103,27 @@ void Message::setErrCode(ERROR_CODE errCode) {
     err_code = errCode;
 }
 
+unsigned char *Message::getServerAuthTag() const {
+    return server_auth_tag;
+}
+
+void Message::setServerAuthTag(unsigned char *serverAuthTag) {
+    server_auth_tag = serverAuthTag;
+}
+
+uint32_t Message::getPeerSn() const {
+    return peer_sn;
+}
+
+void Message::setPeerSn(uint32_t peerSn) {
+    peer_sn = peerSn;
+}
+
+void Message::setPeerIv(unsigned char *peerIv) {
+    peer_iv = peerIv;
+}
+
+unsigned char *Message::getPeerIv() const {
+    return peer_iv;
+}
+

@@ -8,6 +8,7 @@
 #include "Payload.h"
 #include <string>
 #include <cstring>
+#include <ostream>
 
 
 class Message {
@@ -19,10 +20,13 @@ private:
     uint32_t cert_len; // certificate length
     uint32_t c_txt_len; //ciphertext length
     uint32_t sequence_n; //sequence number
+    uint32_t peer_sn; //sequence number between peer
     unsigned char* iv; //initialization vector
+    unsigned char* peer_iv;//initialization vector between peer
     uint32_t signature_len;
     std::string sender;
     std::string recipient;
+    unsigned char* server_auth_tag; //
     //payload
     Payload* payload;
 public:
@@ -53,6 +57,11 @@ public:
 
     ERROR_CODE getErrCode() const;
 
+    unsigned char *getServerAuthTag() const;
+
+    uint32_t getPeerSn() const;
+
+    unsigned char *getPeerIv() const;
 
     void setType(MESSAGE_TYPE type);
 
@@ -75,6 +84,12 @@ public:
     void setIv(unsigned char *iv);
 
     void setErrCode(ERROR_CODE errCode);
+
+    void setServerAuthTag(unsigned char *serverAuthTag);
+
+    void setPeerSn(uint32_t peerSn);
+
+    void setPeerIv(unsigned char *peerIv);
 
 
     virtual ~Message();

@@ -185,6 +185,7 @@ int manage_message(int socket, Message* message){
     string online_users;
     size_t len;
     int cipher_len = 0;
+    bool peer_authentication= false;
     NEW(reply,new Message(),"reply")
     //TODO: MANAGE ERROR MESSAGES
     switch (message->getType()) {
@@ -236,7 +237,7 @@ int manage_message(int socket, Message* message){
             result = CryptoManager::pkey_to_bytes(eph_keys.first,&eph_pub_key_bytes,&eph_pub_key_bytes_size);
             IF_MANAGER_FAILED(result,"obtaining pkey_to_bytes failed",0)
             NEW(to_verify,new unsigned char[encrypted_ms_size + eph_pub_key_bytes_size],"to_verify")
-            //copy them into one buffer to be signed
+            //copy them into one buffer to be verified
             memmove(to_verify,encrypted_master_secret,encrypted_ms_size);
             //move on pointer to put the rest
             memmove(to_verify + encrypted_ms_size ,eph_pub_key_bytes,eph_pub_key_bytes_size);
@@ -400,6 +401,33 @@ int manage_message(int socket, Message* message){
             sender->setIsBusy(false);
             session->close_chat(recipient->getUserName(), sender->getUserName());
             break;
+        case AUTH_PEER_REQUEST:
+        case AUTH_PEER_RESPONSE:
+        case AUTH_PEER_KEY_EX:
+        case AUTH_PEER_KEY_EX_RX:
+            //check authenticity
+            result = check_client_message(message);
+            if(!result)
+                return result;
+            sender = session->get_user(username_sender);
+            recipient = session->get_user(message->getRecipient());
+            result = false;
+            if(recipient->isOnline()){
+                delete message->getIv();
+                iv = CryptoManager::generate_iv();
+                message->setIv(iv);
+                //peer has sent also its authentication tag
+                peer_authentication = message->getType() == AUTH_PEER_KEY_EX_RX;
+                //delete the current tag it will be replaced
+                if(!peer_authentication)
+                    delete message->getPayload()->getAuthTag();
+
+                result = SocketManager::send_authenticated_message(recipient->getSocket(), message,
+                                                                   recipient->getSessionKey(), peer_authentication);
+                recipient->increment_server_sn();
+            }
+            //TODO SEND ERROR MESSAGE
+            break;
         case USERS_LIST:
             result = check_client_message(message);
             if(!result)
@@ -435,6 +463,7 @@ int check_client_message(Message* message){
     User* sender = session->get_user(username_sender);
     unsigned char* iv;
     unsigned char* aad;
+    unsigned char* auth_tag;
     int result = 0;
     size_t len;
     //wrong sequence number
@@ -443,8 +472,13 @@ int check_client_message(Message* message){
     iv = message->getIv();
     len = CryptoManager::message_to_bytes(message,&aad);
     IF_MANAGER_FAILED(len,"check_client_message obtaining aad failed",result);
+    if(message->getType() == AUTH_PEER_KEY_EX_RX or message->getType() == DATA)
+        auth_tag = message->getServerAuthTag();
+    else
+        auth_tag = message->getPayload()->getAuthTag();
     result = CryptoManager::verify_auth_data(aad,len,iv,sender->getSessionKey(),
-                                             message->getPayload()->getAuthTag());
+                                             auth_tag);
+
     IF_MANAGER_FAILED(result,"check_client_message verifying tag",0)
     sender->increment_user_sn();
     delete aad;

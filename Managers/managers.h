@@ -29,7 +29,7 @@ namespace Managers {
         int read_public_key(int socket, EVP_PKEY** pubkey);
         int send_encrypted_message(int socket, uint32_t sequence_number, unsigned char*session_key,
                                std::string body, MESSAGE_TYPE type);
-        int send_authenticated_message(int socket, Message* message,unsigned char *key);
+        int send_authenticated_message(int socket, Message* message,unsigned char *key, bool for_peer= false);
 
 
     }

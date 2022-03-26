@@ -189,7 +189,8 @@ int Managers::SocketManager::send_encrypted_message(int socket, uint32_t sequenc
     IF_MANAGER_FAILED(result,"sending last handshake message failed",0)
     return result;
 }
-int Managers::SocketManager::send_authenticated_message(int socket, Message *message, unsigned char* key) {
+int Managers::SocketManager::send_authenticated_message(int socket, Message *message, unsigned char* key,
+                                                        bool for_peer) {
     unsigned char* aad = nullptr;
     unsigned char* tag = nullptr;
     size_t aad_size;
@@ -201,7 +202,10 @@ int Managers::SocketManager::send_authenticated_message(int socket, Message *mes
     not_used = CryptoManager::authenticate_data(aad,aad_size,message->getIv(),key,tag);
     delete aad;
     IF_MANAGER_FAILED(not_used,"send_authenticated_message failed",0)
-    message->getPayload()->setAuthTag(tag);
+    if(for_peer)
+        message->setServerAuthTag(tag);
+    else
+        message->getPayload()->setAuthTag(tag);
     not_used = SocketManager::send_message(socket, message);
     IF_MANAGER_FAILED(aad_size,"send_authenticated_message sending message failed",0)
     return 1;
@@ -261,7 +265,6 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
             result = SocketManager::write_string(socket,msg->getSender());
             IF_IO_ERROR(result,result)
             nonce = msg->getPayload()->getNonce();
-            //cout << nonce << endl;
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*)&nonce);
             break;
         case AUTH_RESPONSE:
@@ -357,6 +360,110 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
             result = SocketManager::send_public_key(socket,msg->getPayload()->getPubKey());
             IF_IO_ERROR(result,result)
             break;
+        case AUTH_PEER_REQUEST:
+            sequence_number = msg->getSequenceN();
+            result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result,result)
+            iv = msg->getIv();
+            result = SocketManager::send_data(socket,iv,IV_LEN);
+            IF_IO_ERROR(result,result);
+            result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
+            IF_IO_ERROR(result,result)
+            nonce = msg->getPayload()->getNonce();
+            result = SocketManager::write_n(socket,sizeof(uint32_t),(void*)&nonce);
+            IF_IO_ERROR(result,result)
+            result = SocketManager::write_string(socket,msg->getSender());
+            IF_IO_ERROR(result,result)
+            result = SocketManager::write_string(socket,msg->getRecipient());
+            IF_IO_ERROR(result,result)
+            break;
+        case AUTH_PEER_RESPONSE:
+            sequence_number = msg->getSequenceN();
+            //send sequence number
+            result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result,result)
+            iv = msg->getIv();
+            //send iv
+            result = SocketManager::send_data(socket,iv,IV_LEN);
+            IF_IO_ERROR(result,result);
+            //send auth tag
+            result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
+            IF_IO_ERROR(result,result)
+            //send public key
+            result = SocketManager::send_public_key(socket,msg->getPayload()->getPubKey());
+            IF_IO_ERROR(result,result)
+            //send signature
+            len = msg->getSignatureLen();
+            result = SocketManager::send_data(socket,msg->getPayload()->getSignature(),len);
+            IF_IO_ERROR(result,result);
+            //send sender
+            result = SocketManager::write_string(socket,msg->getSender());
+            IF_IO_ERROR(result,result)
+            //send receiver
+            result = SocketManager::write_string(socket,msg->getRecipient());
+            IF_IO_ERROR(result,result)
+            break;
+        case AUTH_PEER_KEY_EX:
+            sequence_number = msg->getSequenceN();
+            //send sequence number
+            result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result,result)
+            //send iv
+            iv = msg->getIv();
+            result = SocketManager::send_data(socket,iv,IV_LEN);
+            IF_IO_ERROR(result,result);
+            //send auth tag
+            result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
+            IF_IO_ERROR(result,result)
+            //send signature
+            len = msg->getSignatureLen();
+            result = SocketManager::send_data(socket,msg->getPayload()->getSignature(),len);
+            IF_IO_ERROR(result,result)
+            //send encrypted session key
+            len = msg->getCTxtLen();
+            result = SocketManager::send_data(socket,msg->getPayload()->getCiphertext(),len);
+            IF_IO_ERROR(result,result);
+            //send sender  username
+            result = SocketManager::write_string(socket,msg->getSender());
+            IF_IO_ERROR(result,result);
+            //send recipient username
+            result = SocketManager::write_string(socket,msg->getRecipient());
+            IF_IO_ERROR(result,result);
+            break;
+        case AUTH_PEER_KEY_EX_RX:
+            sequence_number = msg->getSequenceN();
+            //send sever sequence number
+            result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result,result)
+            sequence_number = msg->getPeerSn();
+            //send peer sequence number
+            result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result,result)
+            //send server iv
+            iv = msg->getIv();
+            result = SocketManager::send_data(socket,iv,IV_LEN);
+            IF_IO_ERROR(result,result);
+            iv = msg->getPeerIv();
+            //send peer iv
+            result = SocketManager::send_data(socket,iv,IV_LEN);
+            IF_IO_ERROR(result,result);
+            //send server tag
+            result = SocketManager::send_data(socket,msg->getServerAuthTag(),TAG_LEN);
+            IF_IO_ERROR(result,result)
+            //send peer tag
+            result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
+            IF_IO_ERROR(result,result)
+            //send ciphertext
+            len = msg->getCTxtLen();
+            result = SocketManager::send_data(socket,msg->getPayload()->getCiphertext(),len);
+            IF_IO_ERROR(result,result);
+            //send sender  username
+            result = SocketManager::write_string(socket,msg->getSender());
+            IF_IO_ERROR(result,result);
+            //send recipient username
+            result = SocketManager::write_string(socket,msg->getRecipient());
+            IF_IO_ERROR(result,result);
+            break;
         case ERROR:
             sequence_number = msg->getSequenceN();
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
@@ -382,6 +489,7 @@ Message* Managers::SocketManager::read_message(int socket){
     int error_code;
     uint32_t nonce;
     uint32_t sequence_number;
+    uint32_t peer_sn;
     EVP_PKEY* pub_key = NULL;
     X509* cert = NULL;
     unsigned char* signature;
@@ -389,7 +497,9 @@ Message* Managers::SocketManager::read_message(int socket){
     unsigned char* ciphertext;
     uint32_t ciphertext_len;
     unsigned char* iv;
+    unsigned char* peer_iv;
     unsigned char* auth_tag;
+    unsigned char* peer_auth_tag;
     string username;
     string  sender;
     string recipient;
@@ -550,6 +660,142 @@ Message* Managers::SocketManager::read_message(int socket){
             msg->getPayload()->setAuthTag(auth_tag);
             msg->setSender(sender);
             msg->getPayload()->setPubKey(pub_key);
+            break;
+        case AUTH_PEER_REQUEST:
+            //read sn
+            result = SocketManager::read_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result, nullptr)
+            //read iv
+            result = SocketManager::read_data(socket,&iv,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read tag
+            result = SocketManager::read_data(socket,&auth_tag,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read nonce
+            result = SocketManager::read_n(socket,sizeof(uint32_t),(void*)&nonce);
+            IF_IO_ERROR(result, nullptr)
+            //read sender
+            result = SocketManager::read_string(socket,sender);
+            IF_IO_ERROR(result, nullptr)
+            //read recipient
+            result = SocketManager::read_string(socket,recipient);
+            IF_IO_ERROR(result, nullptr)
+            NEW(msg, new Message(),"read message allocating message failed")
+            msg->setType(AUTH_PEER_REQUEST);
+            msg->setSequenceN(sequence_number);
+            msg->setIv(iv);
+            msg->getPayload()->setAuthTag(auth_tag);
+            msg->getPayload()->setNonce(nonce);
+            msg->setSender(sender);
+            msg->setRecipient(recipient);
+            break;
+        case AUTH_PEER_RESPONSE:
+            //read sn
+            result = SocketManager::read_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result, nullptr)
+            //read iv
+            result = SocketManager::read_data(socket,&iv,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read tag
+            result = SocketManager::read_data(socket,&auth_tag,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read public key
+            result = SocketManager::read_public_key(socket,&pub_key);
+            IF_IO_ERROR(result, nullptr)
+            //read signature
+            result = SocketManager::read_data(socket,&signature,&signature_len);
+            IF_IO_ERROR(result, nullptr)
+            //read sender
+            result = SocketManager::read_string(socket,sender);
+            IF_IO_ERROR(result, nullptr)
+            //read recipient
+            result = SocketManager::read_string(socket,recipient);
+            IF_IO_ERROR(result, nullptr)
+            NEW(msg, new Message(),"read message allocating message failed")
+            msg->setType(AUTH_PEER_RESPONSE);
+            msg->setSequenceN(sequence_number);
+            msg->setIv(iv);
+            msg->getPayload()->setAuthTag(auth_tag);
+            msg->getPayload()->setPubKey(pub_key);
+            msg->getPayload()->setSignature(signature);
+            msg->setSignatureLen(signature_len);
+            msg->setSender(sender);
+            msg->setRecipient(recipient);
+            break;
+        case AUTH_PEER_KEY_EX:
+            //read sn
+            result = SocketManager::read_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result, nullptr)
+            //read iv
+            result = SocketManager::read_data(socket,&iv,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read tag
+            result = SocketManager::read_data(socket,&auth_tag,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read signature
+            result = SocketManager::read_data(socket,&signature,&signature_len);
+            IF_IO_ERROR(result, nullptr)
+            //read encrypted session key
+            result = SocketManager::read_data(socket,&ciphertext,&ciphertext_len);
+            IF_IO_ERROR(result, nullptr)
+            //read sender
+            result = SocketManager::read_string(socket,sender);
+            IF_IO_ERROR(result, nullptr)
+            //read recipient
+            result = SocketManager::read_string(socket,recipient);
+            IF_IO_ERROR(result, nullptr)
+            NEW(msg, new Message(),"read message allocating message failed")
+            msg->setType(AUTH_PEER_KEY_EX);
+            msg->setSequenceN(sequence_number);
+            msg->setIv(iv);
+            msg->getPayload()->setAuthTag(auth_tag);
+            msg->setSignatureLen(signature_len);
+            msg->getPayload()->setSignature(signature);
+            msg->setCTxtLen(ciphertext_len);
+            msg->getPayload()->setCiphertext(ciphertext);
+            msg->setSender(sender);
+            msg->setRecipient(recipient);
+            break;
+        case AUTH_PEER_KEY_EX_RX:
+            //read server sn
+            result = SocketManager::read_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result, nullptr)
+            //read peer sn
+            result = SocketManager::read_n(socket,sizeof(uint32_t),(void*) &peer_sn);
+            IF_IO_ERROR(result, nullptr)
+            //read server iv
+            result = SocketManager::read_data(socket,&iv,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read peer iv
+            result = SocketManager::read_data(socket,&peer_iv,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read server tag
+            result = SocketManager::read_data(socket,&auth_tag,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read peer tag
+            result = SocketManager::read_data(socket,&peer_auth_tag,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read ciphertext
+            result = SocketManager::read_data(socket,&ciphertext,&ciphertext_len);
+            IF_IO_ERROR(result, nullptr)
+            //read sender
+            result = SocketManager::read_string(socket,sender);
+            IF_IO_ERROR(result, nullptr)
+            //read recipient
+            result = SocketManager::read_string(socket,recipient);
+            IF_IO_ERROR(result, nullptr)
+            NEW(msg, new Message(),"read message allocating message failed")
+            msg->setType(AUTH_PEER_KEY_EX_RX);
+            msg->setSequenceN(sequence_number);
+            msg->setPeerSn(peer_sn);
+            msg->setIv(iv);
+            msg->setPeerIv(peer_iv);
+            msg->setServerAuthTag(auth_tag);
+            msg->getPayload()->setAuthTag(peer_auth_tag);
+            msg->setCTxtLen(ciphertext_len);
+            msg->getPayload()->setCiphertext(ciphertext);
+            msg->setSender(sender);
+            msg->setRecipient(recipient);
             break;
         case ERROR:
             //read sn
@@ -1133,11 +1379,60 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
             not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             break;
+        case AUTH_PEER_REQUEST:
+            not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getIv(),IV_LEN);
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getRecipient().c_str(),message->getRecipient().length());
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            break;
+        case AUTH_PEER_RESPONSE:
+            not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getIv(),IV_LEN);
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = PEM_write_bio_PUBKEY(bio, message->getPayload()->getPubKey());
+            OPENSSL_FAIL(not_used,"message_to_bytes writing pub key failed",0)
+            not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getRecipient().c_str(),message->getRecipient().length());
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            break;
+        case AUTH_PEER_KEY_EX:
+            not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getIv(),IV_LEN);
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio, message->getPayload()->getSignature(),message->getSignatureLen());
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio, message->getPayload()->getCiphertext(),message->getCTxtLen());
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getRecipient().c_str(),message->getRecipient().length());
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            break;
+        case AUTH_PEER_KEY_EX_RX:
+            not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getIv(),IV_LEN);
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio, message->getPayload()->getCiphertext(),message->getCTxtLen());
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getRecipient().c_str(),message->getRecipient().length());
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            break;
         case ERROR:
             not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            break;
         default:
             break;
     }

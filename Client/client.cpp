@@ -117,12 +117,14 @@ int main(){
                     m_status.lock();
                     is_talking = true;
                     m_status.unlock();
+                    is_requester = true;
                 }
                 break;
             case QUIT:
                 m_status.lock();
                 is_talking = false;
                 m_status.unlock();
+                is_requester = false;
                 break;
             case LOGOUT:
                 done = true;
