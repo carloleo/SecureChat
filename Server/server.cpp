@@ -23,13 +23,14 @@ int check_client_message(Message* message);
 
 //global
 Session* session;
+int fd_num;
+fd_set client_set;
 int main() {
     int master_socket;
     //client's socket
     int fd_c;
     size_t n_byte_read;
     int not_used;
-    fd_set client_set;
     fd_set  read_set;
     //socket address
     struct sockaddr_in address;
@@ -49,7 +50,7 @@ int main() {
     cout << "Master socket ready to accept connections" << endl;
     FD_ZERO(&client_set);
     FD_SET(master_socket,&client_set);
-    int fd_num = master_socket;
+    fd_num = master_socket;
     while (true){
         read_set = client_set;
         //cout << "Sleep on select" <<endl;
@@ -70,8 +71,10 @@ int main() {
                     }
                     else{
                         int r = manage_message(fd,message);
-                        if(!r)
-                            disconnect_client(fd,&client_set,&fd_num);
+                        if(!r) {
+                            disconnect_client(fd, &client_set, &fd_num);
+                            //TODO: send notification PEER_DISCONNECTED
+                        }
                     }
                 }
 
@@ -351,13 +354,14 @@ int manage_message(int socket, Message* message){
                 //sent requester public key to target of the conversation
                 result = SocketManager::send_authenticated_message(sender->getSocket(),reply,
                                                                    sender->getSessionKey());
-                if(result){
-                    sender->increment_server_sn();
-
-                }
+                if(result) sender->increment_server_sn();
+                //disconnect target
+                else disconnect_client(sender->getSocket(),&client_set,&fd_num);
 
             } //accepting of request to talk failed
             else{
+                //disconnect requester
+                disconnect_client(recipient->getSocket(),&client_set,&fd_num);
                 //notify sender of REQUEST_OK
                 iv = CryptoManager::generate_iv();
                 reply->setType(ERROR);
@@ -369,6 +373,7 @@ int manage_message(int socket, Message* message){
                 IF_MANAGER_FAILED(result,"REQUEST_OK sending forward error failed",0);
                 sender->setIsBusy(false);
                 recipient->setIsBusy(false);
+                session->close_chat(recipient->getUserName(), sender->getUserName());
             }
             break;
         case REQUEST_KO:
@@ -393,6 +398,7 @@ int manage_message(int socket, Message* message){
             //in case of errors in rejecting the request to talk the target user does not care to be informed
             recipient->setIsBusy(false);
             sender->setIsBusy(false);
+            session->close_chat(recipient->getUserName(), sender->getUserName());
             break;
         case USERS_LIST:
             result = check_client_message(message);

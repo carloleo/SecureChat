@@ -15,3 +15,7 @@ void Chat::setTargetPeer(const std::string &targetPeer) {
 const std::string &Chat::getRequesterPeer() const {
     return requester_peer;
 }
+
+const std::string &Chat::getTargetPeer() const {
+    return target_peer;
+}

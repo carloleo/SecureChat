@@ -6,7 +6,7 @@
 #define SECURECHAT_SESSION_H
 #include <map>
 #include <string>
-#include <vector>
+#include <list>
 #include "User.h"
 #include "../../Common/Chat.h"
 
@@ -19,7 +19,7 @@ private:
     EVP_PKEY* server_pvt_key;
     X509* server_cert;
     //chats among clients
-    vector<Chat*> chats;
+    std::list<Chat*> chats;
 public:
     User* get_user(std::string username);
     void add_user(User* user);
@@ -42,6 +42,7 @@ public:
     string get_online_users();
 
     void open_chat(std::string requester, std::string target);
+    void close_chat(std::string requester, std::string target);
 
 
     ~Session();

@@ -3,6 +3,8 @@
 //
 
 #include "Session.h"
+#include "../../Common/Message.h"
+
 User* Session::get_user(string username) {
     return users.at(username);
 }
@@ -45,9 +47,11 @@ void Session::add_ephemeral_keys(string username,pair<EVP_PKEY*,EVP_PKEY*> eph_k
 
 void Session::disconnect_client(int socket) {
     auto usr = users.begin();
+    User* notified_user = nullptr;
+    string notified_username;
     bool done = false;
     while (usr != users.end() && !done) {
-        if (socket == usr->second->getSocket()) {
+        if (socket == usr->second->getSocket() && usr->second->isOnline()) {
             usr->second->setIsOnline(false);
             string username = usr->second->getUserName();
             //session key
@@ -57,8 +61,25 @@ void Session::disconnect_client(int socket) {
             usr->second->setSnUser(0);
             usr->second->setSnServer(0);
             usr->second->setIsBusy(false);
+//            auto chat = chats.begin();
+//            bool found = false;
+//            while(!found && chat != chats.end()){
+//                //target user disconnected
+//                notified_username = usr->second->getUserName();
+//                if((*chat)->getTargetPeer().compare(notified_username) == 0){
+//                    notified_user = users.at((*chat)->getRequesterPeer());
+//                    chats.erase(chat);
+//                    found = true;
+//
+//                }
+//                else if((*chat)->getRequesterPeer().compare(notified_username) == 0){
+//                    notified_user = users.at((*chat)->getTargetPeer());
+//                    chats.erase(chat);
+//                    found = true;
+//                }
+//                else chat++;
+//            }
             done = true;
-            //TODO: check if there are opened requests to talk, case target user
         }
         usr++;
     }
@@ -123,4 +144,18 @@ void Session::open_chat(std::string requester, std::string target) {
     }
     chat->setRequesterPeer(requester);
     chat->setTargetPeer(target);
+    chats.push_back(chat);
+}
+
+void Session::close_chat(std::string requester, std::string target) {
+    auto it = chats.begin();
+    bool done = false;
+    while (!done && it != chats.end()){
+        if((*it)->getRequesterPeer().compare(requester) == 0
+           && (*it)->getTargetPeer().compare(target) == 0){
+            it = chats.erase(it);
+            done = true;
+        }
+        it++;
+    }
 }

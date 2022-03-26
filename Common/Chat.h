@@ -18,6 +18,8 @@ public:
 
     void setTargetPeer(const std::string &targetPeer);
 
+    const std::string &getTargetPeer() const;
+
     const std::string &getRequesterPeer() const;
 };
 
