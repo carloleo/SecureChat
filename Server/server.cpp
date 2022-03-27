@@ -186,8 +186,10 @@ int manage_message(int socket, Message* message){
     size_t len;
     int cipher_len = 0;
     bool peer_authentication= false;
+    Chat* chat;
+    string username_recipient;
     NEW(reply,new Message(),"reply")
-    //TODO: MANAGE ERROR MESSAGES
+    cerr << message->getType() << endl;
     switch (message->getType()) {
         case AUTH_REQUEST:
             if(!session->is_registered(username_sender) or
@@ -427,6 +429,37 @@ int manage_message(int socket, Message* message){
                                                                    recipient->getSessionKey(), peer_authentication);
                 recipient->increment_server_sn();
             } //error message is sent and chat is closed by session->disconnectClient()
+            break;
+        case PEER_QUIT:
+            //check authenticity
+            result = check_client_message(message);
+            if(!result)
+                return result;
+            sender = session->get_user(username_sender);
+            chat = session->get_chat_by_usr(username_sender);
+            //who has to be notified
+            username_recipient = username_sender.compare(chat->getTargetPeer()) == 0
+                    ? chat->getRequesterPeer() : chat->getTargetPeer();
+            recipient = session->get_user(username_recipient);
+            reply->setType(ERROR);
+            reply->setErrCode(PEER_DISCONNECTED);
+            cerr << "SNN " << recipient->getSnServer() << endl;
+            reply->setSequenceN(recipient->getSnServer());
+            iv = CryptoManager::generate_iv();
+            reply->setIv(iv);
+            //notify the mate
+            result = Managers::SocketManager::send_authenticated_message(recipient->getSocket(),
+                                                                         reply,recipient->getSessionKey());
+            if(result) {
+                recipient->setIsBusy(false);
+                recipient->increment_server_sn();
+            }
+            //in case of issues during sending notify disconnect the recipient
+            else
+                disconnect_client(recipient->getSocket(),&client_set,&fd_num);
+            sender->setIsBusy(false);
+            session->close_chat(chat->getRequesterPeer(),chat->getTargetPeer());
+            result = 1;
             break;
         case USERS_LIST:
             result = check_client_message(message);

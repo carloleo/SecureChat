@@ -259,31 +259,31 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
     //send type
     tmp = msg->getType();
     result = SocketManager::write_n(socket,sizeof(int),(void*)&tmp);
-    IF_IO_ERROR(result,result)
+    IF_IO_ERROR(result,0)
     switch (msg->getType()) {
         case AUTH_REQUEST:
             result = SocketManager::write_string(socket,msg->getSender());
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             nonce = msg->getPayload()->getNonce();
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*)&nonce);
             break;
         case AUTH_RESPONSE:
             len = msg->getSignatureLen();
             result = SocketManager::send_data(socket,msg->getPayload()->getSignature(),len);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             //send ephemeral public key
             result = SocketManager::send_public_key(socket, msg->getPayload()->getPubKey());
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             result = SocketManager::send_certificate(socket,msg->getPayload()->getCert());
             break;
         case AUTH_KEY_EXCHANGE:
             //send sender's username
             result = SocketManager::write_string(socket,msg->getSender());
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             //send signature
             len = msg->getSignatureLen();
             result = SocketManager::send_data(socket,msg->getPayload()->getSignature(),len);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             //send encrypted session key
             len = msg->getCTxtLen();
             result = SocketManager::send_data(socket,msg->getPayload()->getCiphertext(),len);
@@ -293,189 +293,205 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
             //send sequence number
             sequence_number = msg->getSequenceN();
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             //send iv
             iv = msg->getIv();
             result = SocketManager::send_data(socket,iv, IV_LEN);
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             //send encrypted online users list
             len = msg->getCTxtLen();
             result = SocketManager::send_data(socket,msg->getPayload()->getCiphertext(),len);
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             //send authentication tag
             result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             break;
         case REQUEST_TO_TALK:
         case REQUEST_OK:
         case REQUEST_KO:
             sequence_number = msg->getSequenceN();
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             iv = msg->getIv();
             result = SocketManager::send_data(socket,iv,IV_LEN);
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             result = SocketManager::write_string(socket,msg->getSender());
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             result = SocketManager::write_string(socket,msg->getRecipient());
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             break;
         case USERS_LIST:
             sequence_number = msg->getSequenceN();
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             iv = msg->getIv();
             result = SocketManager::send_data(socket,iv,IV_LEN);
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             result = SocketManager::write_string(socket,msg->getSender());
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             break;
         case  USERS_LIST_RESPONSE:
             sequence_number = msg->getSequenceN();
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             iv = msg->getIv();
             result = SocketManager::send_data(socket,iv,IV_LEN);
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             result = SocketManager::send_data(socket,msg->getPayload()->getCiphertext(),msg->getCTxtLen());
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             break;
         case PEER_PUB_KEY:
             sequence_number = msg->getSequenceN();
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             iv = msg->getIv();
             result = SocketManager::send_data(socket,iv,IV_LEN);
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             result = SocketManager::write_string(socket,msg->getSender());
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             result = SocketManager::send_public_key(socket,msg->getPayload()->getPubKey());
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             break;
         case AUTH_PEER_REQUEST:
             sequence_number = msg->getSequenceN();
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             iv = msg->getIv();
             result = SocketManager::send_data(socket,iv,IV_LEN);
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             nonce = msg->getPayload()->getNonce();
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*)&nonce);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             result = SocketManager::write_string(socket,msg->getSender());
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             result = SocketManager::write_string(socket,msg->getRecipient());
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             break;
         case AUTH_PEER_RESPONSE:
             sequence_number = msg->getSequenceN();
             //send sequence number
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             iv = msg->getIv();
             //send iv
             result = SocketManager::send_data(socket,iv,IV_LEN);
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             //send auth tag
             result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             //send public key
             result = SocketManager::send_public_key(socket,msg->getPayload()->getPubKey());
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             //send signature
             len = msg->getSignatureLen();
             result = SocketManager::send_data(socket,msg->getPayload()->getSignature(),len);
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             //send sender
             result = SocketManager::write_string(socket,msg->getSender());
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             //send receiver
             result = SocketManager::write_string(socket,msg->getRecipient());
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             break;
         case AUTH_PEER_KEY_EX:
             sequence_number = msg->getSequenceN();
             //send sequence number
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             //send iv
             iv = msg->getIv();
             result = SocketManager::send_data(socket,iv,IV_LEN);
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             //send auth tag
             result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             //send signature
             len = msg->getSignatureLen();
             result = SocketManager::send_data(socket,msg->getPayload()->getSignature(),len);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             //send encrypted session key
             len = msg->getCTxtLen();
             result = SocketManager::send_data(socket,msg->getPayload()->getCiphertext(),len);
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             //send sender  username
             result = SocketManager::write_string(socket,msg->getSender());
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             //send recipient username
             result = SocketManager::write_string(socket,msg->getRecipient());
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             break;
         case AUTH_PEER_KEY_EX_RX:
             sequence_number = msg->getSequenceN();
             //send sever sequence number
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             sequence_number = msg->getPeerSn();
             //send peer sequence number
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             //send server iv
             iv = msg->getIv();
             result = SocketManager::send_data(socket,iv,IV_LEN);
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             iv = msg->getPeerIv();
             //send peer iv
             result = SocketManager::send_data(socket,iv,IV_LEN);
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             //send server tag
             result = SocketManager::send_data(socket,msg->getServerAuthTag(),TAG_LEN);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             //send peer tag
             result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             //send ciphertext
             len = msg->getCTxtLen();
             result = SocketManager::send_data(socket,msg->getPayload()->getCiphertext(),len);
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             //send sender  username
             result = SocketManager::write_string(socket,msg->getSender());
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             //send recipient username
             result = SocketManager::write_string(socket,msg->getRecipient());
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
+            break;
+        case PEER_QUIT:
+            //send sequence number
+            sequence_number = msg->getSequenceN();
+            result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result,0)
+            //send iv
+            iv = msg->getIv();
+            result = SocketManager::send_data(socket,iv,IV_LEN);
+            IF_IO_ERROR(result,0);
+            //send auth tag
+            result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
+            IF_IO_ERROR(result,0)
+            //send sender  username
+            result = SocketManager::write_string(socket,msg->getSender());
+            IF_IO_ERROR(result,0);
             break;
         case ERROR:
             sequence_number = msg->getSequenceN();
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             error_code = msg->getErrCode();
             result = SocketManager::write_n(socket,sizeof(int),(void*) &error_code);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             iv = msg->getIv();
             result = SocketManager::send_data(socket,iv,IV_LEN);
-            IF_IO_ERROR(result,result);
+            IF_IO_ERROR(result,0);
             result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
-            IF_IO_ERROR(result,result)
+            IF_IO_ERROR(result,0)
             break;
         default:
             break;
@@ -796,6 +812,26 @@ Message* Managers::SocketManager::read_message(int socket){
             msg->getPayload()->setCiphertext(ciphertext);
             msg->setSender(sender);
             msg->setRecipient(recipient);
+            break;
+        case PEER_QUIT:
+            //read sn
+            result = SocketManager::read_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result, nullptr)
+            //read iv
+            result = SocketManager::read_data(socket,&iv,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read tag
+            result = SocketManager::read_data(socket,&auth_tag,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read sender
+            result = SocketManager::read_string(socket,sender);
+            IF_IO_ERROR(result, nullptr)
+            NEW(msg, new Message(),"read message allocating message failed")
+            msg->setType(PEER_QUIT);
+            msg->setSequenceN(sequence_number);
+            msg->setIv(iv);
+            msg->getPayload()->setAuthTag(auth_tag);
+            msg->setSender(sender);
             break;
         case ERROR:
             //read sn
@@ -1426,6 +1462,14 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
             not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             not_used = BIO_write(bio,message->getRecipient().c_str(),message->getRecipient().length());
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            break;
+        case PEER_QUIT:
+            not_used = BIO_write(bio, sn,sizeof(uint32_t));
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getIv(),IV_LEN);
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             break;
         case ERROR:

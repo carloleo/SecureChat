@@ -11,6 +11,7 @@ int main(){
     struct sockaddr_in server_address;
     string  command;
     bool done = false;
+    Message* request  = nullptr;
     //TODO: parsing parameters
     //open socket
     memset((void*)&server_address,0,(size_t) sizeof(server_address));
@@ -62,7 +63,6 @@ int main(){
         bool recipient_offline = false;
         string recipient;
         Message message;
-        Message* request  = nullptr;
         unsigned char* iv;
         unsigned char* tag;
         unsigned char* aad;
@@ -123,9 +123,28 @@ int main(){
                 break;
             case QUIT:
                 m_status.lock();
-                is_talking = false;
+                if(!is_talking){
+                    cerr << "You are not attending to any chat" << endl;
+                    m_status.unlock();
+                    break;
+                }
                 m_status.unlock();
-                is_requester = false;
+                message.setType(PEER_QUIT);
+                //usernames of re
+                message.setSender(username);
+                iv = CryptoManager::generate_iv();
+                message.setIv(iv);
+                message.setSequenceN(server_out_sn);
+                not_used = SocketManager::send_authenticated_message(server_socket,&message,sever_session_key);
+                if(not_used) {
+                    m_status.lock();
+                    is_talking = false;
+                    m_status.unlock();
+                    is_requester = false;
+                    peer_in_sn = 0;
+                    peer_out_sn = 0;
+                }
+                server_out_sn += 1;
                 break;
             case LOGOUT:
                 done = true;
@@ -171,7 +190,13 @@ int main(){
                 not_used = SocketManager::send_authenticated_message(server_socket,&message,sever_session_key);
                 if(!not_used)
                     cerr << "accepting request to talk from: " << request->getSender() << "failed. Try later" << endl;
-                else server_out_sn += 1;
+                else{//request consumed
+                    m_lock.lock();
+                    messages_queue.pop_back();
+                    m_lock.unlock();
+                    request = nullptr;
+                    server_out_sn += 1;
+                }
 
                 break;
             case REJECT:
@@ -195,14 +220,15 @@ int main(){
                 not_used = SocketManager::send_authenticated_message(server_socket,&message,sever_session_key);
                 if(!not_used)
                     cerr << "rejecting request to talk from: " << request->getSender() << "failed. Try later" << endl;
-                else{
+                else{//request consumed
                     m_lock.lock();
                     messages_queue.pop_back();
                     m_lock.unlock();
-                    server_out_sn += 1;
                     m_status.lock();
                     is_talking = false;
                     m_status.unlock();
+                    request = nullptr;
+                    server_out_sn += 1;
                 }
                 break;
             default:

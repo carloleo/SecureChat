@@ -43,6 +43,7 @@ public:
 
     void open_chat(std::string requester, std::string target);
     void close_chat(std::string requester, std::string target);
+    Chat* get_chat_by_usr(std::string  user);
 
 
     ~Session();

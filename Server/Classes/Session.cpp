@@ -178,3 +178,15 @@ void Session::close_chat(std::string requester, std::string target) {
         it++;
     }
 }
+
+Chat* Session::get_chat_by_usr(std::string user) {
+    auto it = chats.begin();
+    bool found = false;
+    while (!found && it != chats.end()) {
+        if ((*it)->getRequesterPeer().compare(user) == 0
+            or (*it)->getTargetPeer().compare(user) == 0) {
+            found = true;
+        } else it++;
+    }
+    return  found ? *it : nullptr;
+}
