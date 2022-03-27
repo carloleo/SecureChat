@@ -288,7 +288,7 @@ int manage_message(int socket, Message* message){
             sender = session->get_user(username_sender);
             recipient = session->get_user(message->getRecipient());
             result = false;
-            if(recipient->isOnline()) {
+            if(recipient->isOnline() and !recipient->isBusy()) {
                 iv = CryptoManager::generate_iv();
                 //free because they will be replaced
                 delete message->getIv();
@@ -302,7 +302,7 @@ int manage_message(int socket, Message* message){
                     recipient->setIsBusy(true);
                     sender->setIsBusy(true);
                     recipient->increment_server_sn();
-                    session->open_chat(recipient->getUserName(),sender->getUserName());
+                    session->open_chat(sender->getUserName(),recipient->getUserName());
                 }
             }
             //forwarding request to talk failed
@@ -426,8 +426,7 @@ int manage_message(int socket, Message* message){
                 result = SocketManager::send_authenticated_message(recipient->getSocket(), message,
                                                                    recipient->getSessionKey(), peer_authentication);
                 recipient->increment_server_sn();
-            }
-            //TODO SEND ERROR MESSAGE
+            } //error message is sent and chat is closed by session->disconnectClient()
             break;
         case USERS_LIST:
             result = check_client_message(message);

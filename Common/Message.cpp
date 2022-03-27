@@ -38,12 +38,18 @@ void Message::setPayload(Payload *payload) {
 Message::~Message() {
     if(iv)
         delete iv;
+    if(peer_iv)
+        delete peer_iv;
+    if(server_auth_tag)
+        delete server_auth_tag;
     if(payload)
         delete payload;
 }
 
 Message::Message() {
     iv = nullptr;
+    peer_iv = nullptr;
+    server_auth_tag = nullptr;
     NEW(payload, new Payload(),"payload")
 }
 

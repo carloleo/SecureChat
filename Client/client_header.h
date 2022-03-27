@@ -35,7 +35,7 @@ std::mutex m_lock;
 std::mutex m_online_users;
 std::mutex m_status;
 std::list<string> users;
-std::vector<Message*> messages_queue;
+std::list<Message*> messages_queue;
 //volatile sig_atomic_t is_talking = 0;
 //GLOBAL
 bool is_talking = false;
@@ -252,6 +252,7 @@ void listener(int socket,pthread_t main_tid){
             break;
         }
         try{
+            cerr << "SN " << message->getSequenceN() << server_in_sn << endl;
             if(message->getSequenceN() != server_in_sn){
                 cerr << "Fatal: received a replayed message" << endl;
                 exit(EXIT_FAILURE);
@@ -278,7 +279,7 @@ void listener(int socket,pthread_t main_tid){
                         cout << "You have just received a REQUEST TO TALK form: " << message->getSender() << endl;
                         cout << "to accept type 'accept', to reject type 'reject' " << endl;
                         m_lock.lock();
-                        messages_queue.push_back(message);
+                        messages_queue.push_front(message);
                         m_lock.unlock();
                         m_status.lock();
                         is_talking = true;
@@ -293,7 +294,6 @@ void listener(int socket,pthread_t main_tid){
                                                              message->getPayload()->getAuthTag());
                     if(result){//authenticated data
                         server_in_sn += 1;
-                        cout << "PUB key got" << endl;
                         peer_pub_key = message->getPayload()->getPubKey();
                         if(is_requester){
                             iv = CryptoManager::generate_iv();
@@ -509,6 +509,17 @@ void listener(int socket,pthread_t main_tid){
                                 break;
                             case FORWARD_REQUEST_FAIL:
                                 cerr << "Server unable to forward your request to talk." << endl;
+                                m_status.lock();
+                                is_talking = false;
+                                m_status.unlock();
+                                break;
+                            case PEER_DISCONNECTED:
+                                cerr << "Peer disconnected. Chat terminated" << endl;
+                                m_lock.lock();
+                                //in case disconnected before sending a response S
+                                if(!messages_queue.empty())
+                                    messages_queue.pop_back();
+                                m_lock.unlock();
                                 m_status.lock();
                                 is_talking = false;
                                 m_status.unlock();

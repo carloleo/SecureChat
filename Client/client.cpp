@@ -32,7 +32,7 @@ int main(){
     cout << "type your username: " << endl;
     cin >> username;
     ISNOT(cin,"Ooops! something went wrong")
-    cout << "authentication in progress..." << endl;
+    trim(username);
     //IDE does not allow to open promt
     string pwd;
     cout << "pwd" << endl;
@@ -172,7 +172,7 @@ int main(){
                 if(!not_used)
                     cerr << "accepting request to talk from: " << request->getSender() << "failed. Try later" << endl;
                 else server_out_sn += 1;
-                //starts authentication with the peer
+
                 break;
             case REJECT:
                 m_lock.lock();
@@ -196,9 +196,9 @@ int main(){
                 if(!not_used)
                     cerr << "rejecting request to talk from: " << request->getSender() << "failed. Try later" << endl;
                 else{
-                    m_online_users.lock();
-                    online_users.erase(online_users.begin());
-                    m_online_users.unlock();
+                    m_lock.lock();
+                    messages_queue.pop_back();
+                    m_lock.unlock();
                     server_out_sn += 1;
                     m_status.lock();
                     is_talking = false;

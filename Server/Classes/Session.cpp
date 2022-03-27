@@ -4,7 +4,8 @@
 
 #include "Session.h"
 #include "../../Common/Message.h"
-
+#include "../Managers/managers.h"
+using namespace Managers;
 User* Session::get_user(string username) {
     return users.at(username);
 }
@@ -46,9 +47,13 @@ void Session::add_ephemeral_keys(string username,pair<EVP_PKEY*,EVP_PKEY*> eph_k
 }
 
 void Session::disconnect_client(int socket) {
-    auto usr = users.begin();
     User* notified_user = nullptr;
+    Message message;
     string notified_username;
+    unsigned char* iv = nullptr;
+    int result = 0;
+    int socket_to_disconnect = -1;
+    auto usr = users.begin();
     bool done = false;
     while (usr != users.end() && !done) {
         if (socket == usr->second->getSocket() && usr->second->isOnline()) {
@@ -61,28 +66,42 @@ void Session::disconnect_client(int socket) {
             usr->second->setSnUser(0);
             usr->second->setSnServer(0);
             usr->second->setIsBusy(false);
-//            auto chat = chats.begin();
-//            bool found = false;
-//            while(!found && chat != chats.end()){
-//                //target user disconnected
-//                notified_username = usr->second->getUserName();
-//                if((*chat)->getTargetPeer().compare(notified_username) == 0){
-//                    notified_user = users.at((*chat)->getRequesterPeer());
-//                    chats.erase(chat);
-//                    found = true;
-//
-//                }
-//                else if((*chat)->getRequesterPeer().compare(notified_username) == 0){
-//                    notified_user = users.at((*chat)->getTargetPeer());
-//                    chats.erase(chat);
-//                    found = true;
-//                }
-//                else chat++;
-//            }
+            auto chat = chats.begin();
+            bool found = false;
+            while(!found && chat != chats.end()){
+
+                //target user disconnected
+                if((*chat)->getTargetPeer().compare(usr->second->getUserName()) == 0)
+                    notified_user = users.at((*chat)->getRequesterPeer()); //notify requester
+                //requester user disconnected
+                else if((*chat)->getRequesterPeer().compare(usr->second->getUserName()) == 0)
+                    notified_user = users.at((*chat)->getTargetPeer()); //notify target user
+                //if disconnect user is in a chat
+                if(notified_user != nullptr){
+                    message.setType(ERROR);
+                    message.setErrCode(PEER_DISCONNECTED);
+                    message.setSequenceN(notified_user->getSnServer());
+                    iv = CryptoManager::generate_iv();
+                    message.setIv(iv);
+                    //notify the mate
+                    result = Managers::SocketManager::send_authenticated_message(notified_user->getSocket(),
+                                                                        &message,notified_user->getSessionKey());
+                    if(result)
+                        notified_user->increment_server_sn();
+                    else
+                        socket_to_disconnect = notified_user->getSocket();
+                    chat = chats.erase(chat);
+                    found = true;
+
+                }
+                else chat++;
+            }
             done = true;
         }
         usr++;
     }
+//    if(socket_to_disconnect != -1)
+//        disconnect_client(socket_to_disconnect);
 }
 
 void Session::destroy_ephemeral_keys(std::string username){
