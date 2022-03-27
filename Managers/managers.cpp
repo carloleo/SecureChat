@@ -1341,6 +1341,7 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
     BIO* bio = BIO_new(BIO_s_mem());
     size_t len;
     int not_used;
+    unsigned char* sn =  uint32_to_bytes(message->getSequenceN());
     OPENSSL_FAIL(bio,"allocating bio stream message to bytes failed",0)
     switch (message->getType()) {
         case REQUEST_TO_TALK:
@@ -1350,7 +1351,7 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 1",0)
             not_used = BIO_write(bio,message->getRecipient().c_str(),message->getRecipient().length());
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 2",0)
-            not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+            not_used = BIO_write(bio, sn,sizeof(uint32_t));
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 3",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 4",0)
@@ -1358,19 +1359,19 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
         case USERS_LIST:
             not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
-            not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+            not_used = BIO_write(bio, sn,sizeof(uint32_t));
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             break;
         case USERS_LIST_RESPONSE:
-            not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+            not_used = BIO_write(bio, sn,sizeof(uint32_t));
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             break;
         case PEER_PUB_KEY:
-            not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+            not_used = BIO_write(bio, sn,sizeof(uint32_t));
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
@@ -1380,7 +1381,7 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             break;
         case AUTH_PEER_REQUEST:
-            not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+            not_used = BIO_write(bio, sn,sizeof(uint32_t));
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
@@ -1390,7 +1391,7 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             break;
         case AUTH_PEER_RESPONSE:
-            not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+            not_used = BIO_write(bio, sn,sizeof(uint32_t));
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
@@ -1402,7 +1403,7 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             break;
         case AUTH_PEER_KEY_EX:
-            not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+            not_used = BIO_write(bio, sn,sizeof(uint32_t));
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
@@ -1416,7 +1417,7 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             break;
         case AUTH_PEER_KEY_EX_RX:
-            not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+            not_used = BIO_write(bio, sn,sizeof(uint32_t));
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
@@ -1428,7 +1429,7 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             break;
         case ERROR:
-            not_used = BIO_write(bio, uint32_to_bytes(message->getSequenceN()),sizeof(uint32_t));
+            not_used = BIO_write(bio, sn,sizeof(uint32_t));
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
@@ -1440,5 +1441,6 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
     NEW(*bytes,new unsigned char[len],"message to bytes allocating buffer failed")
     BIO_read(bio,*bytes,len);
     BIO_free(bio);
+    delete sn;
     return len;
 }

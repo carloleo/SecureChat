@@ -416,6 +416,7 @@ int manage_message(int socket, Message* message){
                 delete message->getIv();
                 iv = CryptoManager::generate_iv();
                 message->setIv(iv);
+                message->setSequenceN(recipient->getSnServer());
                 //peer has sent also its authentication tag
                 peer_authentication = message->getType() == AUTH_PEER_KEY_EX_RX;
                 //delete the current tag it will be replaced

@@ -23,6 +23,7 @@ int prepare_third_message(EVP_PKEY*,Message*,bool for_peer = false);
 int read_encrypted_message(int socket,uint32_t sequence_number,string &message, unsigned char* key);
 inline std::string trim(std::string& str);
 bool  is_online(string username);
+void update_users_list(string text_list);
 //cli interface
 enum COMMAND{TALK,QUIT,LOGOUT,LIST,ACCEPT,REJECT};
 static std::map<std::string ,COMMAND> commands;
@@ -71,6 +72,7 @@ int authenticate_to_server(int server_socket, string username, string &online_us
     int result;
     Message *second_message;
     Message* first_message;
+    string text_list;
     NEW(first_message,new Message(),"first message")
     first_message->setSender(username);
     first_message->setType(AUTH_REQUEST);
@@ -89,9 +91,7 @@ int authenticate_to_server(int server_socket, string username, string &online_us
         return 0;
     //verify received certificate
     server_cert = second_message->getPayload()->getCert();
-    cout << "verifying sever's cert..." << endl;
     result = verify_cert(server_cert);
-    cout << "result: " << (result == 1 ? "valid" : "wrong") << endl;
     EVP_PKEY* server_pub_key = X509_get_pubkey(server_cert);
 
     EVP_PKEY* eph_pub_key = second_message->getPayload()->getPubKey();
@@ -110,8 +110,10 @@ int authenticate_to_server(int server_socket, string username, string &online_us
     IF_MANAGER_FAILED(result,"prepare third message failed",0)
     result = SocketManager::send_message(server_socket,third_message);
     IF_MANAGER_FAILED(result,"sending third message failed",0)
-    result = read_encrypted_message(server_socket,server_in_sn, online_users,sever_session_key);
+    result = read_encrypted_message(server_socket,server_in_sn, text_list,sever_session_key);
     IF_MANAGER_FAILED(result,"reading last handshake message failed",0)
+    //build users list
+    update_users_list(text_list);
     delete second_message;
     delete third_message;
     X509_free(server_cert);
@@ -224,10 +226,11 @@ void listener(int socket,pthread_t main_tid){
     unsigned char *signature = nullptr;
     uint32_t  signature_size = 0;
     size_t aad_len = 0;
-    string splitting = " ";
     int index = -1;
     //peer authentication
     uint32_t  nonce;
+    uint32_t inc_none;
+    string conf_message;
     EVP_PKEY* eph_pubkey = nullptr;
     unsigned char* eph_pubkey_bytes = nullptr;
     uint32_t  eph_pub_key_bytes_size = 0;
@@ -248,7 +251,11 @@ void listener(int socket,pthread_t main_tid){
             cout << "Disconnecting..." << endl;
             break;
         }
-        try{    //TODO: add sequence number check
+        try{
+            if(message->getSequenceN() != server_in_sn){
+                cerr << "Fatal: received a replayed message" << endl;
+                exit(EXIT_FAILURE);
+            }
             switch (message->getType()) {
                 case USERS_LIST_RESPONSE:
                     result = decrypt_message(message, sever_session_key, message_text);
@@ -260,16 +267,7 @@ void listener(int socket,pthread_t main_tid){
                     cout << "USERS LIST" << endl;
                     cout << message_text << endl;
                     //update users online list
-                    m_online_users.lock();
-                    online_users.clear();
-                    online_users.append(message_text);
-                    users.clear();
-                    while((index = online_users.find(splitting)) != string::npos){
-                        users.push_back(online_users.substr(0,index));
-                        //remove last user and splitting char
-                        online_users.erase(0,index + splitting.length());
-                    }
-                    m_online_users.unlock();
+                    update_users_list(message_text);
                     server_in_sn += 1;
                     break;
                 case REQUEST_TO_TALK:
@@ -336,129 +334,165 @@ void listener(int socket,pthread_t main_tid){
                     aad_len = CryptoManager::message_to_bytes(message,&aad);
                     result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
                                                              message->getPayload()->getAuthTag());
-                    //authenticated data
-                    if(result) {
-                        server_in_sn += 1;
-                        eph_pubkey = EVP_PKEY_new();
-                        ISNOT(eph_pubkey,"AUTH_PEER_REQUEST allocating ephemeral keys")
-                        eph_pvtkey = EVP_PKEY_new();
-                        ISNOT(eph_pubkey,"AUTH_PEER_REQUEST allocating ephemeral keys")
-                        result = CryptoManager::generate_ephemeral_rsa(&eph_pubkey, &eph_pvtkey);
-                        if (result) {
-                            signature = CryptoManager::sign_pubKey(eph_pubkey, pvt_client_key,
-                                                                   message->getPayload()->getNonce(), &signature_size);
-                            if (signature) {
-                                nonce = message->getPayload()->getNonce();
-                                peer_message.setType(AUTH_PEER_RESPONSE);
-                                peer_message.setSequenceN(server_out_sn);
-                                peer_message.setSender(message->getRecipient());
-                                peer_message.setRecipient(message->getSender());
-                                peer_message.getPayload()->setPubKey(eph_pubkey);
-                                peer_message.setSignatureLen(signature_size);
-                                peer_message.getPayload()->setSignature(signature);
-                                iv = CryptoManager::generate_iv();
-                                peer_message.setIv(iv);
-                                SocketManager::send_authenticated_message(socket, &peer_message, sever_session_key);
-                                server_out_sn += 1;
-                            }
-                        }
+
+                    if(!result){
+                        cerr << "Fatal authentication error" << endl;
+                        exit(EXIT_FAILURE);
                     }
+                    //authenticated data
+                    server_in_sn += 1;
+                    eph_pubkey = EVP_PKEY_new();
+                    ISNOT(eph_pubkey,"AUTH_PEER_REQUEST allocating ephemeral keys")
+                    eph_pvtkey = EVP_PKEY_new();
+                    ISNOT(eph_pubkey,"AUTH_PEER_REQUEST allocating ephemeral keys")
+                    result = CryptoManager::generate_ephemeral_rsa(&eph_pubkey, &eph_pvtkey);
+                    ISNOT(result,"AUTH_PEER_REQUEST generating ephemeral keys failed")
+                    signature = CryptoManager::sign_pubKey(eph_pubkey, pvt_client_key,
+                                                               message->getPayload()->getNonce(), &signature_size);
+                    ISNOT(signature,"AUTH_PEER_REQUEST signing ephemeral key failed")
+                    //save nonce to complete peer authentication
+                    nonce = message->getPayload()->getNonce();
+                    peer_message.setType(AUTH_PEER_RESPONSE);
+                    peer_message.setSequenceN(server_out_sn);
+                    peer_message.setSender(message->getRecipient());
+                    peer_message.setRecipient(message->getSender());
+                    peer_message.getPayload()->setPubKey(eph_pubkey);
+                    peer_message.setSignatureLen(signature_size);
+                    peer_message.getPayload()->setSignature(signature);
+                    iv = CryptoManager::generate_iv();
+                    peer_message.setIv(iv);
+                    result = SocketManager::send_authenticated_message(socket, &peer_message, sever_session_key);
+                    ISNOT(result,"AUTH_PEER_REQUEST sending message failed ")
+                    server_out_sn += 1;
                     break;
                 case AUTH_PEER_RESPONSE:
                     aad_len = CryptoManager::message_to_bytes(message,&aad);
                     result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
                                                              message->getPayload()->getAuthTag());
-                    //authenticated data
-                    if(result){
-                        server_in_sn += 1;
-                        signature = message->getPayload()->getSignature();
-                        result = CryptoManager::verify_signed_pubKey(message->getPayload()->getPubKey(),nonce,
-                                                                     peer_pub_key,signature,message->getSignatureLen());
-                        ISNOT(result,"non-authenticated data received")
-                        peer_message.setType(AUTH_PEER_KEY_EX);
-                        peer_message.setRecipient(message->getSender());
-                        peer_message.setSequenceN(server_out_sn);
-                        iv = CryptoManager::generate_iv();
-                        peer_message.setIv(iv);
-                        result = prepare_third_message(message->getPayload()->getPubKey(),&peer_message,true);
-                        ISNOT(result,"prepare third message failed")
-                        result = SocketManager::send_authenticated_message(socket,&peer_message,sever_session_key);
-                        ISNOT(result,"sending third message failed")
-                        server_out_sn += 1;
+                    if(!result){
+                        cerr << "Fatal authentication error" << endl;
+                        exit(EXIT_FAILURE);
                     }
+                    //authenticated data
+                    server_in_sn += 1;
+                    signature = message->getPayload()->getSignature();
+                    result = CryptoManager::verify_signed_pubKey(message->getPayload()->getPubKey(),nonce,
+                                                                 peer_pub_key,signature,message->getSignatureLen());
+                    if(!result){
+                        cerr << "Fatal non-authenticated ephemeral public key" << endl;
+                        exit(EXIT_FAILURE);
+                    }
+                    peer_message.setType(AUTH_PEER_KEY_EX);
+                    peer_message.setRecipient(message->getSender());
+                    peer_message.setSequenceN(server_out_sn);
+                    iv = CryptoManager::generate_iv();
+                    peer_message.setIv(iv);
+                    result = prepare_third_message(message->getPayload()->getPubKey(),&peer_message,true);
+                    ISNOT(result,"AUTH_PEER_RESPONSE preparing third message failed")
+                    result = SocketManager::send_authenticated_message(socket,&peer_message,sever_session_key);
+                    ISNOT(result,"AUTH_PEER_RESPONSE sending third message failed")
+                    server_out_sn += 1;
                     break;
                 case AUTH_PEER_KEY_EX:
                     aad_len = CryptoManager::message_to_bytes(message,&aad);
                     result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
                                                              message->getPayload()->getAuthTag());
-                    if(result){
-                        server_in_sn += 1;
-                        CryptoManager::pkey_to_bytes(eph_pubkey,&eph_pubkey_bytes,&eph_pub_key_bytes_size);
-                        NEW(to_verify, new unsigned char[eph_pub_key_bytes_size + message->getSignatureLen()],
-                            "AUTH_PEER_KEY_EX allocating to_verify failed")
-                        //copy the encrypted session key
-                        memmove(to_verify,message->getPayload()->getCiphertext(),message->getCTxtLen());
-                        //move on pointer to put the rest
-                        memmove(to_verify + message->getCTxtLen() ,eph_pubkey_bytes,eph_pub_key_bytes_size);
-                        delete eph_pubkey_bytes;
-                        eph_pubkey_bytes = nullptr;
-                        plain_size = eph_pub_key_bytes_size + message->getCTxtLen();
-                        result = CryptoManager::verify_signature(signature,signature_size,to_verify, plain_size,
-                                                                 peer_pub_key);
-                        //peer signature verified
-                        if(result){
-                            //decrypt master secret  key
-                            result = CryptoManager::rsa_decrypt(message->getPayload()->getCiphertext(),message->getCTxtLen(),&plaintext,
-                                                                &plain_size,eph_pvtkey);
-                            //delete ephemeral keys
-                            EVP_PKEY_free(eph_pubkey);
-                            EVP_PKEY_free(eph_pvtkey);
-                            eph_pubkey = nullptr;
-                            eph_pubkey = nullptr;
-                            ISNOT(result,"AUTH_PEER_KEY_EX decrypting session key failed")
-                            peer_session_key = CryptoManager::compute_session_key(plaintext,plain_size);
-                            ISNOT(peer_session_key,"computing session key failed")
-                            //destroy master secret
-                            destroy_secret(plaintext,plain_size);
-                            //send confirmation message
-                            iv = CryptoManager::generate_iv();
-                            peer_message.setType(AUTH_PEER_KEY_EX_RX);
-                            peer_message.setPeerIv(iv);
-                            peer_message.setSender(username);
-                            peer_message.setRecipient(message->getSender());
-                            peer_message.setSequenceN(server_out_sn);
-                            peer_message.setPeerSn(peer_out_sn);
-                            NEW(auth_tag, new unsigned char[TAG_LEN],"AUTH_PEER_KEY_EX allocating tag failed")
-                            NEW(ciphertext, new unsigned char[sizeof(uint32_t) + EVP_CIPHER_block_size(CIPHER)],"AUTH_PEER_KEY_EX allocating ciphertext failed")
-                            aad = uint32_to_bytes(peer_out_sn);
-                            nonce += 1;
-                            ciphertext_len = CryptoManager::gcm_encrypt(uint32_to_bytes(nonce),
-                                                                        sizeof(uint32_t),
-                                                                        aad,sizeof(uint32_t),
-                                                                        peer_session_key, iv,
-                                                                        IV_LEN,ciphertext,auth_tag);
-                            iv = CryptoManager::generate_iv();
-                            peer_message.setIv(iv);
-                            peer_message.getPayload()->setAuthTag(auth_tag);
-                            peer_message.getPayload()->setCiphertext(ciphertext);
-                            peer_message.setCTxtLen(ciphertext_len);
-                            SocketManager::send_authenticated_message(socket,&peer_message,sever_session_key,true);
-                            peer_out_sn += 1;
-                            server_out_sn += 1;
-                        }
+                    if(!result){
+                        cerr << "Fatal authentication error" << endl;
+                        exit(EXIT_FAILURE);
                     }
+                    //authenticated data
+                    server_in_sn += 1;
+                    CryptoManager::pkey_to_bytes(eph_pubkey,&eph_pubkey_bytes,&eph_pub_key_bytes_size);
+                    NEW(to_verify, new unsigned char[eph_pub_key_bytes_size + message->getSignatureLen()],
+                        "AUTH_PEER_KEY_EX allocating to_verify failed")
+                    //copy the encrypted session key
+                    memmove(to_verify,message->getPayload()->getCiphertext(),message->getCTxtLen());
+                    //move on pointer to put the rest
+                    memmove(to_verify + message->getCTxtLen() ,eph_pubkey_bytes,eph_pub_key_bytes_size);
+                    delete eph_pubkey_bytes;
+                    eph_pubkey_bytes = nullptr;
+                    plain_size = eph_pub_key_bytes_size + message->getCTxtLen();
+                    result = CryptoManager::verify_signature(signature,signature_size,to_verify, plain_size,
+                                                             peer_pub_key);
+                    if(!result){
+                        cerr << "Fatal authentication error" << endl;
+                        exit(EXIT_FAILURE);
+                    }
+                    //peer signature verified
+                    //decrypt master secret  key
+                    result = CryptoManager::rsa_decrypt(message->getPayload()->getCiphertext(),message->getCTxtLen(),&plaintext,
+                                                        &plain_size,eph_pvtkey);
+                    if(!result){
+                        cerr << "Fatal master secret decryption failed " << endl;
+                        exit(EXIT_FAILURE);
+                    }
+                    //delete ephemeral keys
+                    EVP_PKEY_free(eph_pubkey);
+                    EVP_PKEY_free(eph_pvtkey);
+                    eph_pubkey = nullptr;
+                    eph_pubkey = nullptr;
+                    peer_session_key = CryptoManager::compute_session_key(plaintext,plain_size);
+                    ISNOT(peer_session_key,"computing session key failed")
+                    //destroy master secret
+                    destroy_secret(plaintext,plain_size);
+                    //send confirmation message
+                    iv = CryptoManager::generate_iv();
+                    peer_message.setType(AUTH_PEER_KEY_EX_RX);
+                    peer_message.setPeerIv(iv);
+                    peer_message.setSender(username);
+                    peer_message.setRecipient(message->getSender());
+                    peer_message.setSequenceN(server_out_sn);
+                    peer_message.setPeerSn(peer_out_sn);
+                    NEW(auth_tag, new unsigned char[TAG_LEN],"AUTH_PEER_KEY_EX allocating tag failed")
+                    NEW(ciphertext, new unsigned char[sizeof(uint32_t) + EVP_CIPHER_block_size(CIPHER)],"AUTH_PEER_KEY_EX allocating ciphertext failed")
+                    aad = uint32_to_bytes(peer_out_sn);
+                    nonce += 1;
+                    conf_message = to_string(nonce).c_str();
+                    ciphertext_len = CryptoManager::gcm_encrypt((unsigned char*) conf_message.c_str(),
+                                                                conf_message.length(),
+                                                                aad,sizeof(uint32_t),
+                                                                peer_session_key, iv,
+                                                                IV_LEN,ciphertext,auth_tag);
+                    ISNOT(ciphertext_len,"AUTH_PEER_KEY_EX encrypting confirmation messaged failed")
+                    iv = CryptoManager::generate_iv();
+                    peer_message.setIv(iv);
+                    peer_message.getPayload()->setAuthTag(auth_tag);
+                    peer_message.getPayload()->setCiphertext(ciphertext);
+                    peer_message.setCTxtLen(ciphertext_len);
+                    result = SocketManager::send_authenticated_message(socket,&peer_message,sever_session_key,true);
+                    ISNOT(result, "AUTH_PEER_KEY_EX sending message failed")
+                    peer_out_sn += 1;
+                    server_out_sn += 1;
+                    conf_message.erase();
                     break;
                 case AUTH_PEER_KEY_EX_RX:
                     aad_len = CryptoManager::message_to_bytes(message,&aad);
                     result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
                                                              message->getServerAuthTag());
-                    //authenticated data from server
-                    if(result){
-                        result = decrypt_message(message,peer_session_key,s, true);
-                        cout << "RESULT: " << result << endl;
-                        //TODO compare nonce
-                        peer_in_sn += 1;
+                    if(!result){
+                        cerr << "Fatal authentication error" << endl;
+                        exit(EXIT_FAILURE);
                     }
+
+                    //authenticated data from server
+                    server_in_sn += 1;
+                    if(peer_in_sn != message->getPeerSn()){
+                        cerr << "Fatal: received a replayed peer message" << endl;
+                        exit(EXIT_FAILURE);
+                    }
+                    result = decrypt_message(message,peer_session_key,s, true);
+                    if(!result){
+                        cerr << "Fata authentication error" << endl;
+                        exit(EXIT_FAILURE);
+                    }
+                    inc_none = stoul(s.c_str(), nullptr,0);
+                    if((nonce + 1) != inc_none){
+                        cerr << "Fatal: unexpected confirmation message " << endl;
+                        exit(EXIT_FAILURE);
+                    }
+                    peer_in_sn += 1;
+                    cout << "Chat with " << message->getSender() << " started" << endl;
                     break;
                 case ERROR:
                     aad_len = CryptoManager::message_to_bytes(message,&aad);
@@ -516,4 +550,20 @@ bool is_online(string username){
     }
     m_online_users.unlock();
     return found;
+}
+
+void update_users_list(string message_text){
+    string splitting = " ";
+    int index = -1;
+    m_online_users.lock();
+    online_users.clear();
+    online_users.append(message_text);
+    users.clear();
+    while((index = online_users.find(splitting)) != string::npos){
+        users.push_back(online_users.substr(0,index));
+        //remove last user and splitting char
+        online_users.erase(0,index + splitting.length());
+    }
+    online_users.append(message_text);
+    m_online_users.unlock();
 }

@@ -56,6 +56,7 @@ int main(){
     //instantiate thread to read messages from server
     std::thread t1 (listener,server_socket,pthread_self());
     cout << "Users online: " << online_users << endl;
+    cout << endl;
     while (!done){
         int not_used;
         bool recipient_offline = false;
