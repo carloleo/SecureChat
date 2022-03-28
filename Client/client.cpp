@@ -77,10 +77,13 @@ int main(){
         }
         switch (commands[command]) {
             case TALK:
+                m_status.lock();
                 if(is_talking){
                     cerr << "You are already attending to a chat" << endl;
+                    m_status.unlock();
                     break;
                 }
+                m_status.unlock();
                 cout << "type the recipient's username" << endl;
                 cin >> recipient;
                 ISNOT(cin," ");
@@ -117,8 +120,8 @@ int main(){
                     delete aad;
                     m_status.lock();
                     is_talking = true;
-                    m_status.unlock();
                     is_requester = true;
+                    m_status.unlock();
                 }
                 break;
             case QUIT:
@@ -139,12 +142,14 @@ int main(){
                 if(not_used) {
                     m_status.lock();
                     is_talking = false;
-                    m_status.unlock();
                     is_requester = false;
                     peer_in_sn = 0;
                     peer_out_sn = 0;
+                    server_out_sn += 1;
+                    EVP_PKEY_free(peer_pub_key);
+                    peer_pub_key = nullptr;
+                    m_status.unlock();
                 }
-                server_out_sn += 1;
                 break;
             case LOGOUT:
                 done = true;
@@ -195,7 +200,9 @@ int main(){
                     messages_queue.pop_back();
                     m_lock.unlock();
                     request = nullptr;
+                    m_status.lock();
                     server_out_sn += 1;
+                    m_status.unlock();
                 }
 
                 break;
@@ -226,9 +233,10 @@ int main(){
                     m_lock.unlock();
                     m_status.lock();
                     is_talking = false;
+                    is_requester = false;
+                    server_out_sn += 1;
                     m_status.unlock();
                     request = nullptr;
-                    server_out_sn += 1;
                 }
                 break;
             default:

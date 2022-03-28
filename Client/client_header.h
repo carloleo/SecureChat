@@ -38,21 +38,24 @@ std::list<string> users;
 std::list<Message*> messages_queue;
 //volatile sig_atomic_t is_talking = 0;
 //GLOBAL
-bool is_talking = false;
-bool is_requester = false;
-//chat
-EVP_PKEY *peer_pub_key = nullptr;
-unsigned char* peer_session_key = nullptr;
-uint32_t peer_in_sn = 0;
-uint32_t peer_out_sn = 0;
-//receive it to server
-uint32_t server_in_sn = 0;
-//send it to server
-uint32_t server_out_sn = 0;
 //client private key
 EVP_PKEY *pvt_client_key = nullptr;
 //session key
 unsigned char* sever_session_key = nullptr;
+
+//chat
+EVP_PKEY *peer_pub_key = nullptr;
+unsigned char* peer_session_key = nullptr;
+//CLIENT STATUS
+uint32_t peer_in_sn = 0;
+uint32_t peer_out_sn = 0;
+bool is_talking = false;
+bool is_requester = false;
+//receive it to server, after thread instantiation it is only managed by the listener
+uint32_t server_in_sn = 0;
+//send it to server
+uint32_t server_out_sn = 0;
+
 string username;
 string online_users;
 
@@ -301,11 +304,15 @@ void listener(int socket,pthread_t main_tid){
                             peer_message.setIv(iv);
                             peer_message.setSender(username);
                             peer_message.setRecipient(message->getSender());
+                            m_status.lock();
                             peer_message.setSequenceN(server_out_sn);
+                            m_status.unlock();
                             CryptoManager::generate_nonce(&nonce);
                             peer_message.getPayload()->setNonce(nonce);
                             SocketManager::send_authenticated_message(socket,&peer_message,sever_session_key);
+                            m_status.lock();
                             server_out_sn += 1;
+                            m_status.unlock();
                         }
 
                     }
@@ -323,6 +330,7 @@ void listener(int socket,pthread_t main_tid){
                         cout << message->getSender() << " rejected your request to talk" << endl;
                         m_status.lock();
                         is_talking = false;
+                        is_requester = false;
                         m_status.unlock();
                     }
                     else {
@@ -353,7 +361,9 @@ void listener(int socket,pthread_t main_tid){
                     //save nonce to complete peer authentication
                     nonce = message->getPayload()->getNonce();
                     peer_message.setType(AUTH_PEER_RESPONSE);
+                    m_status.lock();
                     peer_message.setSequenceN(server_out_sn);
+                    m_status.unlock();
                     peer_message.setSender(message->getRecipient());
                     peer_message.setRecipient(message->getSender());
                     peer_message.getPayload()->setPubKey(eph_pubkey);
@@ -363,7 +373,9 @@ void listener(int socket,pthread_t main_tid){
                     peer_message.setIv(iv);
                     result = SocketManager::send_authenticated_message(socket, &peer_message, sever_session_key);
                     ISNOT(result,"AUTH_PEER_REQUEST sending message failed ")
+                    m_status.lock();
                     server_out_sn += 1;
+                    m_status.unlock();
                     break;
                 case AUTH_PEER_RESPONSE:
                     aad_len = CryptoManager::message_to_bytes(message,&aad);
@@ -384,14 +396,18 @@ void listener(int socket,pthread_t main_tid){
                     }
                     peer_message.setType(AUTH_PEER_KEY_EX);
                     peer_message.setRecipient(message->getSender());
+                    m_status.lock();
                     peer_message.setSequenceN(server_out_sn);
+                    m_status.unlock();
                     iv = CryptoManager::generate_iv();
                     peer_message.setIv(iv);
                     result = prepare_third_message(message->getPayload()->getPubKey(),&peer_message,true);
                     ISNOT(result,"AUTH_PEER_RESPONSE preparing third message failed")
                     result = SocketManager::send_authenticated_message(socket,&peer_message,sever_session_key);
                     ISNOT(result,"AUTH_PEER_RESPONSE sending third message failed")
+                    m_status.lock();
                     server_out_sn += 1;
+                    m_status.unlock();
                     break;
                 case AUTH_PEER_KEY_EX:
                     aad_len = CryptoManager::message_to_bytes(message,&aad);
@@ -442,11 +458,13 @@ void listener(int socket,pthread_t main_tid){
                     peer_message.setPeerIv(iv);
                     peer_message.setSender(username);
                     peer_message.setRecipient(message->getSender());
-                    peer_message.setSequenceN(server_out_sn);
-                    peer_message.setPeerSn(peer_out_sn);
                     NEW(auth_tag, new unsigned char[TAG_LEN],"AUTH_PEER_KEY_EX allocating tag failed")
                     NEW(ciphertext, new unsigned char[sizeof(uint32_t) + EVP_CIPHER_block_size(CIPHER)],"AUTH_PEER_KEY_EX allocating ciphertext failed")
+                    m_status.lock();
+                    peer_message.setSequenceN(server_out_sn);
+                    peer_message.setPeerSn(peer_out_sn);
                     aad = uint32_to_bytes(peer_out_sn);
+                    m_status.unlock();
                     nonce += 1;
                     conf_message = to_string(nonce).c_str();
                     ciphertext_len = CryptoManager::gcm_encrypt((unsigned char*) conf_message.c_str(),
@@ -462,8 +480,10 @@ void listener(int socket,pthread_t main_tid){
                     peer_message.setCTxtLen(ciphertext_len);
                     result = SocketManager::send_authenticated_message(socket,&peer_message,sever_session_key,true);
                     ISNOT(result, "AUTH_PEER_KEY_EX sending message failed")
+                    m_status.lock();
                     peer_out_sn += 1;
                     server_out_sn += 1;
+                    m_status.unlock();
                     conf_message.erase();
                     break;
                 case AUTH_PEER_KEY_EX_RX:
@@ -477,10 +497,13 @@ void listener(int socket,pthread_t main_tid){
 
                     //authenticated data from server
                     server_in_sn += 1;
+                    m_status.lock();
                     if(peer_in_sn != message->getPeerSn()){
                         cerr << "Fatal: received a replayed peer message" << endl;
+                        m_status.unlock();
                         exit(EXIT_FAILURE);
                     }
+                    m_status.unlock();
                     result = decrypt_message(message,peer_session_key,s, true);
                     if(!result){
                         cerr << "Fata authentication error" << endl;
@@ -491,7 +514,9 @@ void listener(int socket,pthread_t main_tid){
                         cerr << "Fatal: unexpected confirmation message " << endl;
                         exit(EXIT_FAILURE);
                     }
+                    m_status.lock();
                     peer_in_sn += 1;
+                    m_status.unlock();
                     cout << "Chat with " << message->getSender() << " started" << endl;
                     break;
                 case ERROR:
@@ -511,6 +536,7 @@ void listener(int socket,pthread_t main_tid){
                                 cerr << "Server unable to forward your request to talk." << endl;
                                 m_status.lock();
                                 is_talking = false;
+                                is_requester = false;
                                 m_status.unlock();
                                 break;
                             case PEER_DISCONNECTED:
@@ -522,6 +548,11 @@ void listener(int socket,pthread_t main_tid){
                                 m_lock.unlock();
                                 m_status.lock();
                                 is_talking = false;
+                                EVP_PKEY_free(peer_pub_key);
+                                peer_pub_key = nullptr;
+                                peer_out_sn = 0;
+                                peer_in_sn = 0;
+                                is_requester = false;
                                 m_status.unlock();
                                 break;
                             default:
