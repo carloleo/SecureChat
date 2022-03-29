@@ -166,7 +166,7 @@ int Managers::SocketManager::send_encrypted_message(int socket, uint32_t sequenc
     size_t plain_size;
     plain_size = body.length();
     NEW(auth_tag,new unsigned  char [TAG_LEN],"auth_tag")
-    NEW(ciphertext, new unsigned  char[plain_size],"ciphertext")
+    NEW(ciphertext, new unsigned  char[plain_size + BLOCK_SIZE],"ciphertext")
     //prepare message
     Message* message = new Message();
     message->setType(type);

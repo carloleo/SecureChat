@@ -459,7 +459,7 @@ void listener(int socket,pthread_t main_tid){
                     peer_message.setSender(username);
                     peer_message.setRecipient(message->getSender());
                     NEW(auth_tag, new unsigned char[TAG_LEN],"AUTH_PEER_KEY_EX allocating tag failed")
-                    NEW(ciphertext, new unsigned char[sizeof(uint32_t) + EVP_CIPHER_block_size(CIPHER)],"AUTH_PEER_KEY_EX allocating ciphertext failed")
+                    NEW(ciphertext, new unsigned char[sizeof(uint32_t) + BLOCK_SIZE],"AUTH_PEER_KEY_EX allocating ciphertext failed")
                     m_status.lock();
                     peer_message.setSequenceN(server_out_sn);
                     peer_message.setPeerSn(peer_out_sn);

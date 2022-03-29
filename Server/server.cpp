@@ -20,7 +20,7 @@ EVP_PKEY* read_public_key(string username);
 int manage_message(int socket, Message* message);
 void disconnect_client(int socket,fd_set* client_set,int* fd_num);
 int check_client_message(Message* message);
-
+//TODO signal handling ignore sig pipe e termination
 //global
 Session* session;
 int fd_num;
@@ -317,6 +317,8 @@ int manage_message(int socket, Message* message){
                 result = SocketManager::send_authenticated_message(sender->getSocket(),
                                                                    reply,sender->getSessionKey());
                 IF_MANAGER_FAILED(result,"REQUEST_OK sending forward error failed",0);
+                //increment sender sequence number after having sent the error message
+                sender->increment_server_sn();
             }
             break;
         case REQUEST_OK:
@@ -374,6 +376,8 @@ int manage_message(int socket, Message* message){
                 result = SocketManager::send_authenticated_message(sender->getSocket(),
                                                                    reply,sender->getSessionKey());
                 IF_MANAGER_FAILED(result,"REQUEST_OK sending forward error failed",0);
+                //increment sender sequence number after having sent the error message
+                sender->increment_server_sn();
                 sender->setIsBusy(false);
                 recipient->setIsBusy(false);
                 session->close_chat(recipient->getUserName(), sender->getUserName());
@@ -396,12 +400,14 @@ int manage_message(int socket, Message* message){
                 result = SocketManager::send_authenticated_message(recipient->getSocket(), message,
                                                                    recipient->getSessionKey());
                 //request to talk rejected, now they can arrange other conversations
-                recipient->increment_server_sn();
+                if(result)
+                    recipient->increment_server_sn();
             }
             //in case of errors in rejecting the request to talk the target user does not care to be informed
             recipient->setIsBusy(false);
             sender->setIsBusy(false);
             session->close_chat(recipient->getUserName(), sender->getUserName());
+            result = 1;
             break;
         case AUTH_PEER_REQUEST:
         case AUTH_PEER_RESPONSE:
@@ -443,7 +449,6 @@ int manage_message(int socket, Message* message){
             recipient = session->get_user(username_recipient);
             reply->setType(ERROR);
             reply->setErrCode(PEER_DISCONNECTED);
-            cerr << "SNN " << recipient->getSnServer() << endl;
             reply->setSequenceN(recipient->getSnServer());
             iv = CryptoManager::generate_iv();
             reply->setIv(iv);

@@ -13,6 +13,7 @@
 #define RSA_SIZE 2048
 #define TAG_LEN 16
 #define IV_LEN EVP_CIPHER_iv_length(CIPHER)
+#define BLOCK_SIZE EVP_CIPHER_block_size(CIPHER)
 namespace Managers {
     namespace SocketManager {
         int write_n(int socket, size_t amount, void* buff);
