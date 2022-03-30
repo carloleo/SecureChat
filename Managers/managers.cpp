@@ -431,6 +431,7 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
             IF_IO_ERROR(result,0);
             break;
         case AUTH_PEER_KEY_EX_RX:
+        case DATA:
             sequence_number = msg->getSequenceN();
             //send sever sequence number
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
@@ -773,6 +774,7 @@ Message* Managers::SocketManager::read_message(int socket){
             msg->setRecipient(recipient);
             break;
         case AUTH_PEER_KEY_EX_RX:
+        case DATA:
             //read server sn
             result = SocketManager::read_n(socket,sizeof(uint32_t),(void*) &sequence_number);
             IF_IO_ERROR(result, nullptr)
@@ -801,7 +803,7 @@ Message* Managers::SocketManager::read_message(int socket){
             result = SocketManager::read_string(socket,recipient);
             IF_IO_ERROR(result, nullptr)
             NEW(msg, new Message(),"read message allocating message failed")
-            msg->setType(AUTH_PEER_KEY_EX_RX);
+            msg->setType((MESSAGE_TYPE)type);
             msg->setSequenceN(sequence_number);
             msg->setPeerSn(peer_sn);
             msg->setIv(iv);
@@ -1067,7 +1069,7 @@ int Managers::CryptoManager::generate_nonce(uint32_t *nonce) {
     result = CryptoManager::generate_random_bytes(bytes,4);
     if(result)
         *nonce = (uint32_t )((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]);
-    delete bytes;
+    delete [] bytes;
     return result;
 }
 
@@ -1394,90 +1396,90 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
             break;
         case USERS_LIST:
             not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 5",0)
             not_used = BIO_write(bio, sn,sizeof(uint32_t));
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 6",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 7",0)
             break;
         case USERS_LIST_RESPONSE:
             not_used = BIO_write(bio, sn,sizeof(uint32_t));
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 8",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 9",0)
             break;
         case PEER_PUB_KEY:
             not_used = BIO_write(bio, sn,sizeof(uint32_t));
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 10",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 11 ",0)
             not_used = PEM_write_bio_PUBKEY(bio, message->getPayload()->getPubKey());
-            OPENSSL_FAIL(not_used,"message_to_bytes writing pub key failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing pub key failed 12",0)
             not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 13",0)
             break;
         case AUTH_PEER_REQUEST:
             not_used = BIO_write(bio, sn,sizeof(uint32_t));
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 14",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 15",0)
             not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 16",0)
             not_used = BIO_write(bio,message->getRecipient().c_str(),message->getRecipient().length());
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 17",0)
             break;
         case AUTH_PEER_RESPONSE:
             not_used = BIO_write(bio, sn,sizeof(uint32_t));
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 18",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 19",0)
             not_used = PEM_write_bio_PUBKEY(bio, message->getPayload()->getPubKey());
-            OPENSSL_FAIL(not_used,"message_to_bytes writing pub key failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing pub key failed 20",0)
             not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 21",0)
             not_used = BIO_write(bio,message->getRecipient().c_str(),message->getRecipient().length());
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 22",0)
             break;
         case AUTH_PEER_KEY_EX:
             not_used = BIO_write(bio, sn,sizeof(uint32_t));
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 23",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 24",0)
             not_used = BIO_write(bio, message->getPayload()->getSignature(),message->getSignatureLen());
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 25",0)
             not_used = BIO_write(bio, message->getPayload()->getCiphertext(),message->getCTxtLen());
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 26",0)
             not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 27",0)
             not_used = BIO_write(bio,message->getRecipient().c_str(),message->getRecipient().length());
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 28",0)
             break;
         case AUTH_PEER_KEY_EX_RX:
         case DATA:
             not_used = BIO_write(bio, sn,sizeof(uint32_t));
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 29",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 30",0)
             not_used = BIO_write(bio, message->getPayload()->getCiphertext(),message->getCTxtLen());
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 31",0)
             not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 32",0)
             not_used = BIO_write(bio,message->getRecipient().c_str(),message->getRecipient().length());
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 33",0)
             break;
         case PEER_QUIT:
             not_used = BIO_write(bio, sn,sizeof(uint32_t));
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 34",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 35",0)
             not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             break;
         case ERROR:
             not_used = BIO_write(bio, sn,sizeof(uint32_t));
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 36",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
-            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
+            OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed 37",0)
             break;
         default:
             break;

@@ -52,7 +52,7 @@ unsigned char* peer_session_key = nullptr;
 uint32_t peer_in_sn = 0;
 uint32_t peer_out_sn = 0;
 string peer_username;
-bool is_talking = false;
+bool is_busy= false;
 bool is_requester = false;
 //receive it to server, after thread instantiation it is only managed by the listener
 uint32_t server_in_sn = 0;
@@ -288,7 +288,7 @@ void listener(int socket,pthread_t main_tid){
                         messages_queue.push_front(message);
                         m_lock.unlock();
                         m_status.lock();
-                        is_talking = true;
+                        is_busy = true;
                         m_status.unlock();
                         server_in_sn += 1;
                         peer_username = message->getSender();
@@ -333,7 +333,7 @@ void listener(int socket,pthread_t main_tid){
                         server_in_sn += 1;
                         cout << message->getSender() << " rejected your request to talk" << endl;
                         m_status.lock();
-                        is_talking = false;
+                        is_busy = false;
                         is_requester = false;
                         m_status.unlock();
                     }
@@ -497,6 +497,31 @@ void listener(int socket,pthread_t main_tid){
                     m_status.unlock();
                     cout << "Chat with " << message->getSender() << " started" << endl;
                     break;
+                case DATA:
+                    aad_len = CryptoManager::message_to_bytes(message,&aad);
+                    result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
+                                                             message->getServerAuthTag());
+                    if(!result){
+                        cerr << "Fatal authentication error" << endl;
+                        exit(EXIT_FAILURE);
+                    }
+                    server_in_sn += 1;
+                    m_status.lock();
+                    if(peer_in_sn != message->getPeerSn()){
+                        cerr << "Fatal: received a replayed peer message" << endl;
+                        m_status.unlock();
+                        exit(EXIT_FAILURE);
+                    }
+                    result = decrypt_message(message,peer_session_key,s, true);
+                    if(!result){
+                        cerr << "Fata authentication error" << endl;
+                        exit(EXIT_FAILURE);
+                    }
+                    peer_in_sn += 1;
+                    m_status.unlock();
+                    cout << "[" << message->getSender() << "]: " << s << endl;
+                    s.clear();
+                    break;
                 case ERROR:
                     aad_len = CryptoManager::message_to_bytes(message,&aad);
                     result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
@@ -507,13 +532,13 @@ void listener(int socket,pthread_t main_tid){
                             case FORWARD_ACCEPT_FAIL:
                                 cerr << "Server unable to accept the request to talk. The request has been nullified" << endl;
                                 m_status.lock();
-                                is_talking = false;
+                                is_busy = false;
                                 m_status.unlock();
                                 break;
                             case FORWARD_REQUEST_FAIL:
                                 cerr << "Server unable to forward your request to talk." << endl;
                                 m_status.lock();
-                                is_talking = false;
+                                is_busy = false;
                                 is_requester = false;
                                 m_status.unlock();
                                 break;
@@ -525,9 +550,13 @@ void listener(int socket,pthread_t main_tid){
                                     messages_queue.pop_back();
                                 m_lock.unlock();
                                 m_status.lock();
-                                is_talking = false;
+                                is_busy = false;
                                 EVP_PKEY_free(peer_pub_key);
                                 peer_pub_key = nullptr;
+                                if(peer_session_key != nullptr) {
+                                    destroy_secret(peer_session_key, KEY_LENGTH);
+                                    peer_session_key = nullptr;
+                                }
                                 peer_out_sn = 0;
                                 peer_in_sn = 0;
                                 is_requester = false;

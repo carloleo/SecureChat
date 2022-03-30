@@ -73,7 +73,6 @@ int main() {
                         int r = manage_message(fd,message);
                         if(!r) {
                             disconnect_client(fd, &client_set, &fd_num);
-                            //TODO: send notification PEER_DISCONNECTED
                         }
                     }
                 }
@@ -189,7 +188,6 @@ int manage_message(int socket, Message* message){
     Chat* chat;
     string username_recipient;
     NEW(reply,new Message(),"reply")
-    cerr << message->getType() << endl;
     switch (message->getType()) {
         case AUTH_REQUEST:
             if(!session->is_registered(username_sender) or
@@ -413,6 +411,7 @@ int manage_message(int socket, Message* message){
         case AUTH_PEER_RESPONSE:
         case AUTH_PEER_KEY_EX:
         case AUTH_PEER_KEY_EX_RX:
+        case DATA:
             //check authenticity
             result = check_client_message(message);
             if(!result)
@@ -426,7 +425,7 @@ int manage_message(int socket, Message* message){
                 message->setIv(iv);
                 message->setSequenceN(recipient->getSnServer());
                 //peer has sent also its authentication tag
-                peer_authentication = message->getType() == AUTH_PEER_KEY_EX_RX;
+                peer_authentication = message->getType() == AUTH_PEER_KEY_EX_RX or message->getType() == DATA;
                 //delete the current tag it will be replaced
                 if(!peer_authentication)
                     delete message->getPayload()->getAuthTag();

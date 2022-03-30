@@ -32,13 +32,13 @@ int main(){
     commands["reject"] = REJECT;
     commands["send"] = SEND;
     cout << "type your username: " << endl;
-    cin >> username;
+    getline(cin,username);
     ISNOT(cin,"Ooops! something went wrong")
     trim(username);
     //IDE does not allow to open promt
     string pwd;
     cout << "pwd" << endl;
-    cin >> pwd;
+    getline(cin,pwd);
     //reading client pvt key
     FILE* file;
     string filename = (string)  CERT_DIR + username + "_key.pem" ;
@@ -55,6 +55,10 @@ int main(){
         close(server_socket);
         exit(EXIT_FAILURE);
     }
+    //plain text to be sent
+    string text;
+    string recipient;
+    string line;
     //instantiate thread to read messages from server
     std::thread t1 (listener,server_socket,pthread_self());
     cout << "Users online: " << online_users << endl;
@@ -62,8 +66,6 @@ int main(){
     while (!done){
         int not_used;
         bool recipient_offline = false;
-        string text;
-        string recipient;
         Message message;
         int ciphertext_len = 0;
         unsigned  char* ciphertext = nullptr;
@@ -72,8 +74,13 @@ int main(){
         unsigned char* aad;
         size_t len;
         cout << "Type command" << endl;
-        cin >> command;
-        ISNOT(cin,"error getting command")
+        getline(cin,line);
+        if(!cin){
+            cerr <<"Error getting command" << endl;
+            cin.clear();
+            continue;
+        }
+        command = line.substr(0,line.find_first_of(' '));
         trim(command);
         if(!commands.count(command)){
             cerr << "invalid command" << endl;
@@ -82,14 +89,15 @@ int main(){
         switch (commands[command]) {
             case TALK:
                 m_status.lock();
-                if(is_talking){
+                if(is_busy){
                     cerr << "You are already attending to a chat" << endl;
                     m_status.unlock();
                     break;
                 }
                 m_status.unlock();
+                recipient.erase();
                 cout << "type the recipient's username" << endl;
-                cin >> recipient;
+                getline(cin,recipient);
                 ISNOT(cin," ");
                 trim(recipient);
                 //yourself
@@ -123,7 +131,7 @@ int main(){
                     delete aad;
                     m_status.lock();
                     server_out_sn += 1;
-                    is_talking = true;
+                    is_busy = true;
                     is_requester = true;
                     m_status.unlock();
                     cout << "Request to talk sent" << endl;
@@ -132,8 +140,8 @@ int main(){
                 break;
             case QUIT:
                 m_status.lock();
-                if(!is_talking){
-                    cerr << "You are not attending to any chat" << endl;
+                if(peer_session_key == nullptr){
+                    cerr << "You have not set up any chat" << endl;
                     m_status.unlock();
                     break;
                 }
@@ -147,13 +155,15 @@ int main(){
                 not_used = SocketManager::send_authenticated_message(server_socket,&message,sever_session_key);
                 if(not_used) {
                     m_status.lock();
-                    is_talking = false;
+                    is_busy = false;
                     is_requester = false;
                     peer_in_sn = 0;
                     peer_out_sn = 0;
                     server_out_sn += 1;
                     EVP_PKEY_free(peer_pub_key);
                     peer_pub_key = nullptr;
+                    destroy_secret(peer_session_key,KEY_LENGTH);
+                    peer_session_key = nullptr;
                     m_status.unlock();
                     cout << "Chat has been left"<< endl;
                     cout << endl;
@@ -242,7 +252,7 @@ int main(){
                     messages_queue.pop_back();
                     m_lock.unlock();
                     m_status.lock();
-                    is_talking = false;
+                    is_busy = false;
                     is_requester = false;
                     server_out_sn += 1;
                     m_status.unlock();
@@ -252,39 +262,26 @@ int main(){
                 }
                 break;
             case SEND:
-//                if(request == nullptr){
-//                    cerr << "No chat ongoing" << endl;
-//                    cerr << endl;
-//                }
-//                cout << "Type the message: " << endl;
-//                cin >> text;
-//                message.setType(DATA);
-//                message.setSender(username);
-//                message.setRecipient(is_requester ? recipient : peer_username);
-//                iv = CryptoManager::generate_iv();
-//                message.setPeerIv(iv);
-//                message.setPeerSn(peer_out_sn);
-//                //TODO authenticate message and send iv
-//                aad = uint32_to_bytes(peer_out_sn);
-//                NEW(tag,new unsigned char[TAG_LEN],"allocating tag")
-//                NEW(ciphertext, new unsigned char[sizeof(uint32_t) + BLOCK_SIZE],"allocating ciphertext failed")
-//                ciphertext_len = CryptoManager::gcm_encrypt((unsigned char*) text.c_str(),
-//                                                            text.length(),
-//                                                            aad,sizeof(uint32_t),
-//                                                            peer_session_key, iv,
-//                                                            IV_LEN,ciphertext,tag);
-//                ISNOT(ciphertext_len,"encrypting messaged failed")
-//                message.setCTxtLen(ciphertext_len);
-//                message.getPayload()->setAuthTag(tag);
-//                //set iv for the server
-//                iv = CryptoManager::generate_iv();
-//                //set sn for the server
-//                message.setSequenceN(server_out_sn);
-//                message.setIv(iv);
-//                SocketManager::send_authenticated_message(server_socket,&message,peer_session_key, true);
-//                cout << "Message sent" << endl;
-//                server_out_sn += 1;
-//                peer_out_sn += 1;
+                m_status.lock();
+                if(peer_session_key == nullptr){
+                    cerr << "No chat ongoing" << endl;
+                    m_status.unlock();
+                    cerr << endl;
+                }
+                m_status.unlock();
+                cout << "Type the message: " << endl;
+                getline(cin,text);
+                if(!cin){
+                    cerr << "Please re-type the message some error occurred" << endl;
+                    cin.clear();
+                    break;
+                }
+                not_used = send_peer_message(server_socket,text, DATA,username,
+                                  is_requester ? recipient : peer_username);
+                if(not_used){
+                    cout << "[" << username << "]: "<< text << endl;
+                }
+                text.clear();
                 break;
             default:
                 cerr << "invalid command" << endl;
