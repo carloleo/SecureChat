@@ -30,6 +30,7 @@ int main(){
     commands["list"] = LIST;
     commands["accept"] = ACCEPT;
     commands["reject"] = REJECT;
+    commands["send"] = SEND;
     cout << "type your username: " << endl;
     cin >> username;
     ISNOT(cin,"Ooops! something went wrong")
@@ -61,8 +62,11 @@ int main(){
     while (!done){
         int not_used;
         bool recipient_offline = false;
+        string text;
         string recipient;
         Message message;
+        int ciphertext_len = 0;
+        unsigned  char* ciphertext = nullptr;
         unsigned char* iv;
         unsigned char* tag;
         unsigned char* aad;
@@ -122,6 +126,8 @@ int main(){
                     is_talking = true;
                     is_requester = true;
                     m_status.unlock();
+                    cout << "Request to talk sent" << endl;
+                    cout << endl;
                 }
                 break;
             case QUIT:
@@ -149,6 +155,8 @@ int main(){
                     EVP_PKEY_free(peer_pub_key);
                     peer_pub_key = nullptr;
                     m_status.unlock();
+                    cout << "Chat has been left"<< endl;
+                    cout << endl;
                 }
                 break;
             case LOGOUT:
@@ -203,6 +211,8 @@ int main(){
                     m_status.lock();
                     server_out_sn += 1;
                     m_status.unlock();
+                    cout << "Request to talk has been accepted" << endl;
+                    cout << endl;
                 }
 
                 break;
@@ -237,7 +247,44 @@ int main(){
                     server_out_sn += 1;
                     m_status.unlock();
                     request = nullptr;
+                    cout << "Request to talk from has been rejected" << endl;
+                    cout << endl;
                 }
+                break;
+            case SEND:
+//                if(request == nullptr){
+//                    cerr << "No chat ongoing" << endl;
+//                    cerr << endl;
+//                }
+//                cout << "Type the message: " << endl;
+//                cin >> text;
+//                message.setType(DATA);
+//                message.setSender(username);
+//                message.setRecipient(is_requester ? recipient : peer_username);
+//                iv = CryptoManager::generate_iv();
+//                message.setPeerIv(iv);
+//                message.setPeerSn(peer_out_sn);
+//                //TODO authenticate message and send iv
+//                aad = uint32_to_bytes(peer_out_sn);
+//                NEW(tag,new unsigned char[TAG_LEN],"allocating tag")
+//                NEW(ciphertext, new unsigned char[sizeof(uint32_t) + BLOCK_SIZE],"allocating ciphertext failed")
+//                ciphertext_len = CryptoManager::gcm_encrypt((unsigned char*) text.c_str(),
+//                                                            text.length(),
+//                                                            aad,sizeof(uint32_t),
+//                                                            peer_session_key, iv,
+//                                                            IV_LEN,ciphertext,tag);
+//                ISNOT(ciphertext_len,"encrypting messaged failed")
+//                message.setCTxtLen(ciphertext_len);
+//                message.getPayload()->setAuthTag(tag);
+//                //set iv for the server
+//                iv = CryptoManager::generate_iv();
+//                //set sn for the server
+//                message.setSequenceN(server_out_sn);
+//                message.setIv(iv);
+//                SocketManager::send_authenticated_message(server_socket,&message,peer_session_key, true);
+//                cout << "Message sent" << endl;
+//                server_out_sn += 1;
+//                peer_out_sn += 1;
                 break;
             default:
                 cerr << "invalid command" << endl;

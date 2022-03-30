@@ -78,6 +78,7 @@ void Session::disconnect_client(int socket) {
                     notified_user = users.at((*chat)->getTargetPeer()); //notify target user
                 //if disconnect user is in a chat
                 if(notified_user != nullptr){
+                    notified_user->setIsBusy(false);
                     message.setType(ERROR);
                     message.setErrCode(PEER_DISCONNECTED);
                     message.setSequenceN(notified_user->getSnServer());

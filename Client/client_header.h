@@ -25,10 +25,12 @@ inline std::string trim(std::string& str);
 bool  is_online(string username);
 void update_users_list(string text_list);
 //cli interface
-enum COMMAND{TALK,QUIT,LOGOUT,LIST,ACCEPT,REJECT};
+enum COMMAND{TALK,QUIT,LOGOUT,LIST,ACCEPT,REJECT,SEND};
 static std::map<std::string ,COMMAND> commands;
 void listener(int socket,pthread_t main_tid);
 int decrypt_message(Message* data, unsigned char* key, string &message, bool from_user = false);
+int prepare_peer_aad(Message* message, unsigned char** aad);
+int send_peer_message(int socket, string text, MESSAGE_TYPE messageType, string sender, string recipient);
 //messages queue
 std::mutex m_lock;
 //users online
@@ -49,6 +51,7 @@ unsigned char* peer_session_key = nullptr;
 //CLIENT STATUS
 uint32_t peer_in_sn = 0;
 uint32_t peer_out_sn = 0;
+string peer_username;
 bool is_talking = false;
 bool is_requester = false;
 //receive it to server, after thread instantiation it is only managed by the listener
@@ -193,8 +196,8 @@ int decrypt_message(Message* data, unsigned char* key, string &message,bool from
     size_t aad_size;
     //get additional authentication data
     if(from_user){
-        aad = uint32_to_bytes(data->getPeerSn());
-        aad_size = sizeof(uint32_t);
+        //TODO call prepeare_peer_aad
+        aad_size = prepare_peer_aad(data,&aad);
     }
     else{
         aad_size = CryptoManager::message_to_bytes(data,&aad);
@@ -288,6 +291,7 @@ void listener(int socket,pthread_t main_tid){
                         is_talking = true;
                         m_status.unlock();
                         server_in_sn += 1;
+                        peer_username = message->getSender();
                     }
                     delete aad;
                     break;
@@ -453,37 +457,11 @@ void listener(int socket,pthread_t main_tid){
                     //destroy master secret
                     destroy_secret(plaintext,plain_size);
                     //send confirmation message
-                    iv = CryptoManager::generate_iv();
-                    peer_message.setType(AUTH_PEER_KEY_EX_RX);
-                    peer_message.setPeerIv(iv);
-                    peer_message.setSender(username);
-                    peer_message.setRecipient(message->getSender());
-                    NEW(auth_tag, new unsigned char[TAG_LEN],"AUTH_PEER_KEY_EX allocating tag failed")
-                    NEW(ciphertext, new unsigned char[sizeof(uint32_t) + BLOCK_SIZE],"AUTH_PEER_KEY_EX allocating ciphertext failed")
-                    m_status.lock();
-                    peer_message.setSequenceN(server_out_sn);
-                    peer_message.setPeerSn(peer_out_sn);
-                    aad = uint32_to_bytes(peer_out_sn);
-                    m_status.unlock();
                     nonce += 1;
                     conf_message = to_string(nonce).c_str();
-                    ciphertext_len = CryptoManager::gcm_encrypt((unsigned char*) conf_message.c_str(),
-                                                                conf_message.length(),
-                                                                aad,sizeof(uint32_t),
-                                                                peer_session_key, iv,
-                                                                IV_LEN,ciphertext,auth_tag);
-                    ISNOT(ciphertext_len,"AUTH_PEER_KEY_EX encrypting confirmation messaged failed")
-                    iv = CryptoManager::generate_iv();
-                    peer_message.setIv(iv);
-                    peer_message.getPayload()->setAuthTag(auth_tag);
-                    peer_message.getPayload()->setCiphertext(ciphertext);
-                    peer_message.setCTxtLen(ciphertext_len);
-                    result = SocketManager::send_authenticated_message(socket,&peer_message,sever_session_key,true);
-                    ISNOT(result, "AUTH_PEER_KEY_EX sending message failed")
-                    m_status.lock();
-                    peer_out_sn += 1;
-                    server_out_sn += 1;
-                    m_status.unlock();
+                    result = send_peer_message(socket,conf_message,AUTH_PEER_KEY_EX_RX,username,
+                                               message->getSender());
+                    ISNOT(result,"ERROR during peer authentication")
                     conf_message.erase();
                     break;
                 case AUTH_PEER_KEY_EX_RX:
@@ -608,4 +586,79 @@ void update_users_list(string message_text){
     }
     online_users.append(message_text);
     m_online_users.unlock();
+}
+
+int prepare_peer_aad(Message* message, unsigned char** aad){
+    BIO* bio = BIO_new(BIO_s_mem());
+    size_t len;
+    int not_used;
+    unsigned char* sn =  uint32_to_bytes(message->getPeerSn());
+    if(!bio){
+        delete sn;
+        return 0;
+    }
+    not_used = BIO_write(bio, (const char*) sn, sizeof(uint32_t));
+    delete sn;
+    if(!not_used)
+        return 0;
+    not_used = BIO_write(bio, (const char*) message->getPeerIv(), IV_LEN);
+    if(!not_used)
+        return 0;
+    len = BIO_pending(bio);
+    NEW(*aad, new unsigned char[len],"prepare_peer_aad allocating aad failed")
+    not_used = BIO_read(bio,*aad,len);
+    return not_used > 0 ? len : 0;
+}
+int send_peer_message(int socket, string text, MESSAGE_TYPE messageType, string sender, string recipient){
+    Message message;
+    unsigned char* iv = nullptr;
+    unsigned char* aad = nullptr;
+    unsigned char* ciphertext = nullptr;
+    unsigned char* auth_tag = nullptr;
+    int ciphertext_len = -1;
+    int aad_len = -1;
+    int result = 0;
+    message.setType(messageType);
+    iv = CryptoManager::generate_iv();
+    if(!iv)
+        return 0;
+    message.setPeerIv(iv);
+    message.setSender(sender);
+    message.setRecipient(recipient);
+    m_status.lock();
+    message.setPeerSn(peer_out_sn);
+    aad_len = prepare_peer_aad(&message,&aad);
+    if(!aad_len){
+        m_status.unlock();
+        return 0;
+    }
+    NEW(auth_tag, new unsigned char[TAG_LEN],"AUTH_PEER_KEY_EX allocating tag failed")
+    NEW(ciphertext, new unsigned char[sizeof(uint32_t) + BLOCK_SIZE],"AUTH_PEER_KEY_EX allocating ciphertext failed")
+    ciphertext_len = CryptoManager::gcm_encrypt((unsigned char*) text.c_str(),
+                                                text.length(),
+                                                aad,aad_len,
+                                                peer_session_key, iv,
+                                                IV_LEN,ciphertext,auth_tag);
+    if(!ciphertext_len){
+        m_status.unlock();
+        return 0;
+    }
+    delete aad;
+    message.getPayload()->setCiphertext(ciphertext);
+    message.setCTxtLen(ciphertext_len);
+    message.getPayload()->setAuthTag(auth_tag);
+    //set server data
+    message.setSequenceN(server_out_sn);
+    iv = CryptoManager::generate_iv();
+    if(!iv){
+        m_status.unlock();
+        return 0;
+    }
+    message.setIv(iv);
+    result = SocketManager::send_authenticated_message(socket,&message,sever_session_key,true);
+    ISNOT(result, "send_peer_message sending message failed")
+    server_out_sn += 1;
+    peer_out_sn += 1;
+    m_status.unlock();
+    return  1;
 }

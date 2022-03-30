@@ -1453,6 +1453,7 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             break;
         case AUTH_PEER_KEY_EX_RX:
+        case DATA:
             not_used = BIO_write(bio, sn,sizeof(uint32_t));
             OPENSSL_FAIL(not_used,"message_to_bytes writing bio stream failed",0)
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
