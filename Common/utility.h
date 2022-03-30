@@ -53,6 +53,6 @@ static inline void destroy_secret(unsigned char* ptr, size_t size){
 #pragma optimize("", off)
     memset(ptr, 0, size);
 #pragma optmize("", on)
-    delete ptr;
+    delete [] ptr;
 }
 #endif //SECURECHAT_UTILITY_H

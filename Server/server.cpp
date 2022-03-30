@@ -518,7 +518,7 @@ int check_client_message(Message* message){
 
     IF_MANAGER_FAILED(result,"check_client_message verifying tag",0)
     sender->increment_user_sn();
-    delete aad;
+    delete [] aad;
     return result;
 }
 

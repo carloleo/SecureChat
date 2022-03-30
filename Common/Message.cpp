@@ -37,11 +37,11 @@ void Message::setPayload(Payload *payload) {
 
 Message::~Message() {
     if(iv)
-        delete iv;
+        delete [] iv;
     if(peer_iv)
-        delete peer_iv;
+        delete [] peer_iv;
     if(server_auth_tag)
-        delete server_auth_tag;
+        delete [] server_auth_tag;
     if(payload)
         delete payload;
 }

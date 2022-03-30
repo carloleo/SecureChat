@@ -147,7 +147,7 @@ int Managers::SocketManager::read_certificate(int socket, X509 **cert) {
     OPENSSL_FAIL(stream,"writing certificate to bio stream failed",0)
     *cert = PEM_read_bio_X509(stream, NULL,NULL,NULL);
     BIO_free(stream);
-    delete cert_buff;
+    delete [] cert_buff;
     return *cert != NULL ? 1 : 0;
 
 
@@ -185,7 +185,7 @@ int Managers::SocketManager::send_encrypted_message(int socket, uint32_t sequenc
     //send message
     result = SocketManager::send_message(socket,message);
     delete message;
-    delete aad;
+    delete [] aad;
     IF_MANAGER_FAILED(result,"sending last handshake message failed",0)
     return result;
 }
@@ -200,7 +200,7 @@ int Managers::SocketManager::send_authenticated_message(int socket, Message *mes
     IF_MANAGER_FAILED(aad_size,"send_authenticated_message getting aad failed",0)
     NEW(tag,new unsigned char[TAG_LEN],"send_authenticated_message allocating tag")
     not_used = CryptoManager::authenticate_data(aad,aad_size,message->getIv(),key,tag);
-    delete aad;
+    delete [] aad;
     IF_MANAGER_FAILED(not_used,"send_authenticated_message failed",0)
     if(for_peer)
         message->setServerAuthTag(tag);
@@ -227,7 +227,7 @@ int Managers::SocketManager::read_public_key(int socket, EVP_PKEY **pubkey) {
     OPENSSL_FAIL(stream,"writing pub key to bio stream failed",0)
     *pubkey = PEM_read_bio_PUBKEY(stream, NULL,NULL,NULL);
     BIO_free(stream);
-    delete pub_key_buff;
+    delete [] pub_key_buff;
     return *pubkey != NULL ? 1 : 0;
 
 }
@@ -1182,7 +1182,7 @@ int Managers::CryptoManager::verify_signed_pubKey(EVP_PKEY *pubkey_signed, uint3
     OPENSSL_FAIL(not_used,"reading from bio stream failed", 0);
     not_used = CryptoManager::verify_signature(signature,signature_size,plain_text,plain_size,pubkey);
     BIO_free(stream);
-    delete plain_text;
+    delete [] plain_text;
     return not_used;
 }
 unsigned char* Managers::CryptoManager::compute_hash(unsigned char *bytes,size_t size,uint32_t * digest_len) {
@@ -1210,7 +1210,7 @@ unsigned char* Managers::CryptoManager::compute_session_key(unsigned char *maste
     OPENSSL_FAIL(digest,"computing digest failed", nullptr)
     NEW(session_key,new unsigned char[KEY_LENGTH],"session_key compute")
     memmove(session_key,digest,KEY_LENGTH);
-    delete digest;
+    delete [] digest;
     return session_key;
 }
 //do not allocate ciphertext buffer
@@ -1488,6 +1488,6 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
     NEW(*bytes,new unsigned char[len],"message to bytes allocating buffer failed")
     BIO_read(bio,*bytes,len);
     BIO_free(bio);
-    delete sn;
+    delete [] sn;
     return len;
 }

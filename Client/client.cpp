@@ -134,6 +134,7 @@ int main(){
                     is_busy = true;
                     is_requester = true;
                     m_status.unlock();
+                    delete [] aad;
                     cout << "Request to talk sent" << endl;
                     cout << endl;
                 }

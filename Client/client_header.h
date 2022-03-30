@@ -152,7 +152,7 @@ int prepare_third_message(EVP_PKEY* eph_pub_key,Message* msg, bool for_peer){
     memmove(to_sign, encrypted_master_secret, encrypted_ms_size);
     //move on pointer to put the rest
     memmove(to_sign + encrypted_ms_size , eph_pub_key_bytes, eph_pub_key_bytes_size);
-    delete eph_pub_key_bytes;
+    delete [] eph_pub_key_bytes;
 
 
     //sign
@@ -177,7 +177,7 @@ int prepare_third_message(EVP_PKEY* eph_pub_key,Message* msg, bool for_peer){
         sever_session_key = session_key;
     IF_MANAGER_FAILED(sever_session_key,"generating session key failed",0)
     destroy_secret(master_secret,KEY_LENGTH);
-    delete to_sign;
+    delete [] to_sign;
     return 1;
 }
 int read_encrypted_message(int socket,uint32_t sequence_number,string &message, unsigned  char* key){
@@ -215,12 +215,12 @@ int decrypt_message(Message* data, unsigned char* key, string &message,bool from
        memmove(tmp,plaintext,pt_len);
        tmp[pt_len] = '\0';
        message.append(tmp);
-       delete tmp;
+       delete [] tmp;
     }
 
     delete data;
-    delete aad;
-    delete plaintext;
+    delete [] aad;
+    delete [] plaintext;
     return pt_len > 0;
 
 }
@@ -293,7 +293,7 @@ void listener(int socket,pthread_t main_tid){
                         server_in_sn += 1;
                         peer_username = message->getSender();
                     }
-                    delete aad;
+                    delete [] aad;
                     break;
                 case PEER_PUB_KEY:
                     aad_len = CryptoManager::message_to_bytes(message,&aad);
@@ -627,7 +627,7 @@ int prepare_peer_aad(Message* message, unsigned char** aad){
         return 0;
     }
     not_used = BIO_write(bio, (const char*) sn, sizeof(uint32_t));
-    delete sn;
+    delete [] sn;
     if(!not_used)
         return 0;
     not_used = BIO_write(bio, (const char*) message->getPeerIv(), IV_LEN);
