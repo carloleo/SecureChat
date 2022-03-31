@@ -128,7 +128,6 @@ int main(){
                     message.getPayload()->setAuthTag(tag);
                     not_used = SocketManager::send_message(server_socket,&message);
                     IF_MANAGER_FAILED(not_used,"Sending request to talk",1)
-                    delete aad;
                     m_status.lock();
                     server_out_sn += 1;
                     is_busy = true;

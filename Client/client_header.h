@@ -253,6 +253,7 @@ void listener(int socket,pthread_t main_tid){
         string message_text;
         message = SocketManager::read_message(socket);
         string s;
+        string tmp;
         if(!message){ //TODO termination protocol
             cout << "Disconnecting..." << endl;
             break;
@@ -482,6 +483,7 @@ void listener(int socket,pthread_t main_tid){
                         exit(EXIT_FAILURE);
                     }
                     m_status.unlock();
+                    tmp = message->getSender();
                     result = decrypt_message(message,peer_session_key,s, true);
                     if(!result){
                         cerr << "Fata authentication error" << endl;
@@ -495,7 +497,7 @@ void listener(int socket,pthread_t main_tid){
                     m_status.lock();
                     peer_in_sn += 1;
                     m_status.unlock();
-                    cout << "Chat with " << message->getSender() << " started" << endl;
+                    cout << "Chat with " << tmp << " started" << endl;
                     break;
                 case DATA:
                     aad_len = CryptoManager::message_to_bytes(message,&aad);
@@ -512,6 +514,7 @@ void listener(int socket,pthread_t main_tid){
                         m_status.unlock();
                         exit(EXIT_FAILURE);
                     }
+                    tmp = message->getSender();
                     result = decrypt_message(message,peer_session_key,s, true);
                     if(!result){
                         cerr << "Fata authentication error" << endl;
@@ -519,7 +522,7 @@ void listener(int socket,pthread_t main_tid){
                     }
                     peer_in_sn += 1;
                     m_status.unlock();
-                    cout << "[" << message->getSender() << "]: " << s << endl;
+                    cout << "[" << tmp << "]: " << s << endl;
                     s.clear();
                     break;
                 case ERROR:
@@ -647,6 +650,7 @@ int send_peer_message(int socket, string text, MESSAGE_TYPE messageType, string 
     int ciphertext_len = -1;
     int aad_len = -1;
     int result = 0;
+    int to_allocate = -1;
     message.setType(messageType);
     iv = CryptoManager::generate_iv();
     if(!iv)
@@ -662,7 +666,8 @@ int send_peer_message(int socket, string text, MESSAGE_TYPE messageType, string 
         return 0;
     }
     NEW(auth_tag, new unsigned char[TAG_LEN],"AUTH_PEER_KEY_EX allocating tag failed")
-    NEW(ciphertext, new unsigned char[sizeof(uint32_t) + BLOCK_SIZE],"AUTH_PEER_KEY_EX allocating ciphertext failed")
+    to_allocate = text.length() + BLOCK_SIZE;
+    NEW(ciphertext, new unsigned char[to_allocate],"AUTH_PEER_KEY_EX allocating ciphertext failed")
     ciphertext_len = CryptoManager::gcm_encrypt((unsigned char*) text.c_str(),
                                                 text.length(),
                                                 aad,aad_len,
@@ -672,7 +677,7 @@ int send_peer_message(int socket, string text, MESSAGE_TYPE messageType, string 
         m_status.unlock();
         return 0;
     }
-    delete aad;
+    delete [] aad;
     message.getPayload()->setCiphertext(ciphertext);
     message.setCTxtLen(ciphertext_len);
     message.getPayload()->setAuthTag(auth_tag);

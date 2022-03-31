@@ -161,12 +161,14 @@ int Managers::SocketManager::send_encrypted_message(int socket, uint32_t sequenc
     unsigned char* aad;
     unsigned char* iv;
     size_t aad_len;
+    int to_allocate = -1;
     iv = CryptoManager::generate_iv();
     IF_MANAGER_FAILED(iv,"send_encrypted_message generating iv failed",0)
     size_t plain_size;
     plain_size = body.length();
+    to_allocate = plain_size + BLOCK_SIZE;
     NEW(auth_tag,new unsigned  char [TAG_LEN],"auth_tag")
-    NEW(ciphertext, new unsigned  char[plain_size + BLOCK_SIZE],"ciphertext")
+    NEW(ciphertext, new unsigned  char[to_allocate],"ciphertext")
     //prepare message
     Message* message = new Message();
     message->setType(type);
@@ -244,7 +246,7 @@ int Managers::SocketManager::read_string(int socket, std::string &str) {
         data[size] = '\0';
         str.append(data);
     }
-    delete data;
+    delete [] data;
     return result;
 
 }
