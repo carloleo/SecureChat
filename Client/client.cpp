@@ -287,6 +287,7 @@ int main(){
                 cerr << "invalid command" << endl;
                 break;
         }
+        line.erase();
     }
     t1.detach();
     EVP_PKEY_free(pvt_client_key);
