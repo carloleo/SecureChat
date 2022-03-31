@@ -17,6 +17,7 @@ using namespace std;
 using namespace Managers;
 void usage();
 //functions
+void clean_up();
 int authenticate_to_server(int server_socket,string username,string &online_users);
 int verify_cert(X509*);
 int prepare_third_message(EVP_PKEY*,Message*,bool for_peer = false);
@@ -123,6 +124,7 @@ int authenticate_to_server(int server_socket, string username, string &online_us
     delete second_message;
     delete third_message;
     X509_free(server_cert);
+    EVP_PKEY_free(eph_pub_key);
     return result;
 
 }
@@ -196,7 +198,6 @@ int decrypt_message(Message* data, unsigned char* key, string &message,bool from
     size_t aad_size;
     //get additional authentication data
     if(from_user){
-        //TODO call prepeare_peer_aad
         aad_size = prepare_peer_aad(data,&aad);
     }
     else{
@@ -255,8 +256,8 @@ void listener(int socket,pthread_t main_tid){
         string s;
         string tmp;
         if(!message){ //TODO termination protocol
-            cout << "Disconnecting..." << endl;
-            break;
+            cerr << "Server disconnected" << endl;
+            exit(EXIT_SUCCESS);
         }
         try{
             cerr << "SN " << message->getSequenceN() << server_in_sn << endl;
@@ -431,9 +432,10 @@ void listener(int socket,pthread_t main_tid){
                     memmove(to_verify,message->getPayload()->getCiphertext(),message->getCTxtLen());
                     //move on pointer to put the rest
                     memmove(to_verify + message->getCTxtLen() ,eph_pubkey_bytes,eph_pub_key_bytes_size);
-                    delete eph_pubkey_bytes;
+                    delete [] eph_pubkey_bytes;
                     eph_pubkey_bytes = nullptr;
                     plain_size = eph_pub_key_bytes_size + message->getCTxtLen();
+                    signature = message->getPayload()->getSignature();
                     result = CryptoManager::verify_signature(signature,signature_size,to_verify, plain_size,
                                                              peer_pub_key);
                     if(!result){
@@ -639,6 +641,7 @@ int prepare_peer_aad(Message* message, unsigned char** aad){
     len = BIO_pending(bio);
     NEW(*aad, new unsigned char[len],"prepare_peer_aad allocating aad failed")
     not_used = BIO_read(bio,*aad,len);
+    BIO_free(bio);
     return not_used > 0 ? len : 0;
 }
 int send_peer_message(int socket, string text, MESSAGE_TYPE messageType, string sender, string recipient){
@@ -695,4 +698,14 @@ int send_peer_message(int socket, string text, MESSAGE_TYPE messageType, string 
     peer_out_sn += 1;
     m_status.unlock();
     return  1;
+}
+void clean_up(){
+    if(pvt_client_key)
+        EVP_PKEY_free(pvt_client_key);
+    if(sever_session_key)
+        destroy_secret(sever_session_key,KEY_LENGTH);
+    if(peer_session_key)
+        destroy_secret(peer_session_key,KEY_LENGTH);
+    if(peer_pub_key)
+        EVP_PKEY_free(peer_pub_key);
 }

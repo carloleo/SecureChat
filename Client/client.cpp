@@ -13,6 +13,8 @@ int main(){
     bool done = false;
     Message* request  = nullptr;
     //TODO: parsing parameters
+    //register function at exit
+    ISLESSTHANZERO(atexit(clean_up),"registering function at exit failed")
     //open socket
     memset((void*)&server_address,0,(size_t) sizeof(server_address));
     server_address.sin_family= AF_INET; //kind of socket
@@ -179,17 +181,15 @@ int main(){
                 iv = CryptoManager::generate_iv();
                 IF_MANAGER_FAILED(iv,"generating iv failed",1)
                 message.setIv(iv);
-                //authenticate request
-                NEW(tag,new unsigned char[TAG_LEN],"allocating tag")
-                len = CryptoManager::message_to_bytes(&message,&aad);
-                not_used = CryptoManager::authenticate_data(aad,
-                                                            len,iv,sever_session_key,tag);
-                IF_MANAGER_FAILED(not_used,"Authenticate data failed",1)
-                message.getPayload()->setAuthTag(tag);
-                not_used = SocketManager::send_message(server_socket,&message);
-                IF_MANAGER_FAILED(not_used,"Sending request to talk",1)
-                server_out_sn += 1;
-                delete aad;
+                //send authenticated request
+                not_used = SocketManager::send_authenticated_message(server_socket,&message,sever_session_key);
+                if(not_used) {
+                    m_status.lock();
+                    server_out_sn += 1;
+                    m_status.unlock();
+                }
+                else
+                    cerr << "error in sending the request. Try later." << endl;
                 break;
                 //TODO make a function to send authenticate request
             case ACCEPT:
@@ -290,8 +290,7 @@ int main(){
         line.erase();
     }
     t1.detach();
-    EVP_PKEY_free(pvt_client_key);
-    return  0;
+    exit(EXIT_SUCCESS);
 }
 
 

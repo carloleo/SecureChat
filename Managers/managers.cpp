@@ -1141,8 +1141,8 @@ int Managers::CryptoManager::generate_ephemeral_rsa(EVP_PKEY** pub_key, EVP_PKEY
     BIO_free(pvt_key_stream);
     BIO_free_all(bio_buff_pub_key);
     BIO_free_all(bio_buff_pvt_key);
-    delete pub_key_bytes;
-    delete pvt_key_bytes;
+    delete [] pub_key_bytes;
+    delete [] pvt_key_bytes;
     //REMINDER: free both input keys
     return 1;
 }
@@ -1165,7 +1165,7 @@ unsigned char* Managers::CryptoManager::sign_pubKey(EVP_PKEY *pubkey,EVP_PKEY *p
     signature = CryptoManager::sign(plain_text,plain_size,pvtkey,signature_size);
     //cleaning up
     BIO_free(stream);
-    delete plain_text;
+    delete [] plain_text;
     return signature;
 }
 int Managers::CryptoManager::verify_signed_pubKey(EVP_PKEY *pubkey_signed, uint32_t nonce, EVP_PKEY *pubkey,
