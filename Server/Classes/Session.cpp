@@ -28,6 +28,8 @@ Session::~Session(){
     users.clear();
     if(server_pvt_key)
         EVP_PKEY_free(server_pvt_key);
+    if(server_cert)
+        X509_free(server_cert);
 
     auto eph_key = ephemeral_keys.begin();
 
@@ -36,6 +38,12 @@ Session::~Session(){
         EVP_PKEY_free(eph_key->second.second);
         eph_key++;
     }
+    auto chat = chats.begin();
+    while(chat != chats.end()){
+        delete *chat;
+        chat ++;
+    }
+    chats.clear();
 }
 
 bool Session::is_registered(std::string username){
@@ -173,6 +181,7 @@ void Session::close_chat(std::string requester, std::string target) {
     while (!done && it != chats.end()){
         if((*it)->getRequesterPeer().compare(requester) == 0
            && (*it)->getTargetPeer().compare(target) == 0){
+            delete *it;
             it = chats.erase(it);
             done = true;
         }
