@@ -100,7 +100,11 @@ int main(){
                 recipient.erase();
                 cout << "type the recipient's username" << endl;
                 getline(cin,recipient);
-                ISNOT(cin," ");
+                if(!cin){
+                    cerr << "Error, acquiring the recipient username" << endl;
+                    cin.clear();
+                    break;
+                }
                 trim(recipient);
                 //yourself
                 if(username.compare(recipient) == 0){
@@ -121,23 +125,19 @@ int main(){
                     iv = CryptoManager::generate_iv();
                     IF_MANAGER_FAILED(iv,"generating iv failed",1)
                     message.setIv(iv);
-                    //authenticate request
-                    NEW(tag,new unsigned char[TAG_LEN],"allocating tag")
-                    size_t len = CryptoManager::message_to_bytes(&message,&aad);
-                    not_used = CryptoManager::authenticate_data(aad,
-                                                                len,iv,sever_session_key,tag);
-                    IF_MANAGER_FAILED(not_used,"Authenticate data failed",1)
-                    message.getPayload()->setAuthTag(tag);
-                    not_used = SocketManager::send_message(server_socket,&message);
-                    IF_MANAGER_FAILED(not_used,"Sending request to talk",1)
-                    m_status.lock();
-                    server_out_sn += 1;
-                    is_busy = true;
-                    is_requester = true;
-                    m_status.unlock();
-                    delete [] aad;
-                    cout << "Request to talk sent" << endl;
-                    cout << endl;
+                    //send authenticate request
+                    not_used = SocketManager::send_authenticated_message(server_socket,&message,
+                                                                         sever_session_key);
+                    if(not_used) {
+                        m_status.lock();
+                        server_out_sn += 1;
+                        is_busy = true;
+                        is_requester = true;
+                        m_status.unlock();
+                        cout << "Request to talk sent" << endl;
+                        cout << endl;
+                    }
+                    else cerr <<" Error in sending request to talk" << endl;
                 }
                 break;
             case QUIT:
@@ -172,6 +172,19 @@ int main(){
                 }
                 break;
             case LOGOUT:
+                m_status.lock();
+                if(peer_session_key != nullptr){
+                    cout << "type quit to leave the chat beafor log out" << endl;
+                    m_status.unlock();
+                    break;
+                }
+                m_status.unlock();
+                message.setType(CLIENT_DONE);
+                message.setSender(username);
+                iv = CryptoManager::generate_iv();
+                message.setIv(iv);
+                message.setSequenceN(server_out_sn);
+                SocketManager::send_authenticated_message(server_socket,&message,sever_session_key);
                 done = true;
                 break;
             case LIST:
@@ -217,6 +230,7 @@ int main(){
                     m_lock.lock();
                     messages_queue.pop_back();
                     m_lock.unlock();
+                    delete request;
                     request = nullptr;
                     m_status.lock();
                     server_out_sn += 1;
@@ -256,6 +270,7 @@ int main(){
                     is_requester = false;
                     server_out_sn += 1;
                     m_status.unlock();
+                    delete request;
                     request = nullptr;
                     cout << "Request to talk from has been rejected" << endl;
                     cout << endl;
@@ -267,6 +282,7 @@ int main(){
                     cerr << "No chat ongoing" << endl;
                     m_status.unlock();
                     cerr << endl;
+                    break;
                 }
                 m_status.unlock();
                 cout << "Type the message: " << endl;

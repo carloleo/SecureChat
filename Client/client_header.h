@@ -19,6 +19,7 @@ void usage();
 //functions
 void clean_up();
 int authenticate_to_server(int server_socket,string username,string &online_users);
+int verify_server_authenticity(Message* message, bool peer_protection = false);
 int verify_cert(X509*);
 int prepare_third_message(EVP_PKEY*,Message*,bool for_peer = false);
 int read_encrypted_message(int socket,uint32_t sequence_number,string &message, unsigned char* key);
@@ -280,9 +281,7 @@ void listener(int socket,pthread_t main_tid){
                     server_in_sn += 1;
                     break;
                 case REQUEST_TO_TALK:
-                    aad_len = CryptoManager::message_to_bytes(message,&aad);
-                    result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
-                                                             message->getPayload()->getAuthTag());
+                    result = verify_server_authenticity(message);
                     if(result) {
                         cout << "You have just received a REQUEST TO TALK form: " << message->getSender() << endl;
                         cout << "to accept type 'accept', to reject type 'reject' " << endl;
@@ -295,12 +294,9 @@ void listener(int socket,pthread_t main_tid){
                         server_in_sn += 1;
                         peer_username = message->getSender();
                     }
-                    delete [] aad;
                     break;
                 case PEER_PUB_KEY:
-                    aad_len = CryptoManager::message_to_bytes(message,&aad);
-                    result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
-                                                             message->getPayload()->getAuthTag());
+                    result = verify_server_authenticity(message);
                     if(result){//authenticated data
                         server_in_sn += 1;
                         peer_pub_key = message->getPayload()->getPubKey();
@@ -320,17 +316,17 @@ void listener(int socket,pthread_t main_tid){
                             server_out_sn += 1;
                             m_status.unlock();
                         }
+                        delete message;
 
                     }
                     else{
+                        delete message;
                         cerr << "Fatal authentication error" << endl;
                         exit(EXIT_FAILURE);
                     }
                     break;
                 case REQUEST_KO:
-                    aad_len = CryptoManager::message_to_bytes(message,&aad);
-                    result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
-                                                             message->getPayload()->getAuthTag());
+                    result = verify_server_authenticity(message);
                     if(result){//authenticated data
                         server_in_sn += 1;
                         cout << message->getSender() << " rejected your request to talk" << endl;
@@ -338,17 +334,16 @@ void listener(int socket,pthread_t main_tid){
                         is_busy = false;
                         is_requester = false;
                         m_status.unlock();
+                        delete message;
                     }
                     else {
+                        delete message;
                         cerr << "Fatal authentication error" << endl;
                         exit(EXIT_FAILURE);
                     }
                     break;
                 case AUTH_PEER_REQUEST:
-                    aad_len = CryptoManager::message_to_bytes(message,&aad);
-                    result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
-                                                             message->getPayload()->getAuthTag());
-
+                    result = verify_server_authenticity(message);
                     if(!result){
                         cerr << "Fatal authentication error" << endl;
                         exit(EXIT_FAILURE);
@@ -378,15 +373,14 @@ void listener(int socket,pthread_t main_tid){
                     iv = CryptoManager::generate_iv();
                     peer_message.setIv(iv);
                     result = SocketManager::send_authenticated_message(socket, &peer_message, sever_session_key);
+                    delete message;
                     ISNOT(result,"AUTH_PEER_REQUEST sending message failed ")
                     m_status.lock();
                     server_out_sn += 1;
                     m_status.unlock();
                     break;
                 case AUTH_PEER_RESPONSE:
-                    aad_len = CryptoManager::message_to_bytes(message,&aad);
-                    result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
-                                                             message->getPayload()->getAuthTag());
+                    result = verify_server_authenticity(message);
                     if(!result){
                         cerr << "Fatal authentication error" << endl;
                         exit(EXIT_FAILURE);
@@ -416,9 +410,7 @@ void listener(int socket,pthread_t main_tid){
                     m_status.unlock();
                     break;
                 case AUTH_PEER_KEY_EX:
-                    aad_len = CryptoManager::message_to_bytes(message,&aad);
-                    result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
-                                                             message->getPayload()->getAuthTag());
+                    result = verify_server_authenticity(message);
                     if(!result){
                         cerr << "Fatal authentication error" << endl;
                         exit(EXIT_FAILURE);
@@ -438,6 +430,7 @@ void listener(int socket,pthread_t main_tid){
                     signature = message->getPayload()->getSignature();
                     result = CryptoManager::verify_signature(signature,signature_size,to_verify, plain_size,
                                                              peer_pub_key);
+                    delete [] to_verify;
                     if(!result){
                         cerr << "Fatal authentication error" << endl;
                         exit(EXIT_FAILURE);
@@ -465,12 +458,11 @@ void listener(int socket,pthread_t main_tid){
                     result = send_peer_message(socket,conf_message,AUTH_PEER_KEY_EX_RX,username,
                                                message->getSender());
                     ISNOT(result,"ERROR during peer authentication")
+                    delete message;
                     conf_message.erase();
                     break;
                 case AUTH_PEER_KEY_EX_RX:
-                    aad_len = CryptoManager::message_to_bytes(message,&aad);
-                    result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
-                                                             message->getServerAuthTag());
+                    result = verify_server_authenticity(message, true);
                     if(!result){
                         cerr << "Fatal authentication error" << endl;
                         exit(EXIT_FAILURE);
@@ -502,9 +494,7 @@ void listener(int socket,pthread_t main_tid){
                     cout << "Chat with " << tmp << " started" << endl;
                     break;
                 case DATA:
-                    aad_len = CryptoManager::message_to_bytes(message,&aad);
-                    result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
-                                                             message->getServerAuthTag());
+                    result = verify_server_authenticity(message, true);
                     if(!result){
                         cerr << "Fatal authentication error" << endl;
                         exit(EXIT_FAILURE);
@@ -528,9 +518,7 @@ void listener(int socket,pthread_t main_tid){
                     s.clear();
                     break;
                 case ERROR:
-                    aad_len = CryptoManager::message_to_bytes(message,&aad);
-                    result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
-                                                             message->getPayload()->getAuthTag());
+                    result = verify_server_authenticity(message);
                     if(result){
                         server_in_sn += 1;
                         switch (message -> getErrCode()){
@@ -569,6 +557,7 @@ void listener(int socket,pthread_t main_tid){
                                 break;
                             default:
                                 break;
+                            delete message;
                         }
                     }
                     break;
@@ -708,4 +697,17 @@ void clean_up(){
         destroy_secret(peer_session_key,KEY_LENGTH);
     if(peer_pub_key)
         EVP_PKEY_free(peer_pub_key);
+}
+
+int verify_server_authenticity(Message* message,bool peer_protection){
+    int aad_len = -1;
+    unsigned char* aad = nullptr;
+    int result = 0;
+    aad_len = CryptoManager::message_to_bytes(message,&aad);
+    if(!aad_len)
+        return 0;
+    result = CryptoManager::verify_auth_data(aad, aad_len, message->getIv(), sever_session_key,
+                                             peer_protection ? message->getServerAuthTag() : message->getPayload()->getAuthTag());
+    delete [] aad;
+    return result;
 }

@@ -502,6 +502,21 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
             result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
             IF_IO_ERROR(result,0)
             break;
+        case CLIENT_DONE:
+            sequence_number = msg->getSequenceN();
+            result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result,0)
+            //send iv
+            iv = msg->getIv();
+            result = SocketManager::send_data(socket,iv,IV_LEN);
+            IF_IO_ERROR(result,0);
+            //send auth tag
+            result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
+            IF_IO_ERROR(result,0)
+            //send sender  username
+            result = SocketManager::write_string(socket,msg->getSender());
+            IF_IO_ERROR(result,0);
+            break;
         default:
             break;
     }
@@ -861,6 +876,26 @@ Message* Managers::SocketManager::read_message(int socket){
             msg->getPayload()->setAuthTag(auth_tag);
             msg->setSequenceN(sequence_number);
             msg->setIv(iv);
+            break;
+        case CLIENT_DONE:
+            //read sn
+            result = SocketManager::read_n(socket,sizeof(uint32_t),(void*) &sequence_number);
+            IF_IO_ERROR(result, nullptr)
+            //read iv
+            result = SocketManager::read_data(socket,&iv,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read tag
+            result = SocketManager::read_data(socket,&auth_tag,&size);
+            IF_IO_ERROR(result, nullptr)
+            //read sender
+            result = SocketManager::read_string(socket,sender);
+            IF_IO_ERROR(result, nullptr)
+            NEW(msg, new Message(),"read message allocating message failed")
+            msg->setType(CLIENT_DONE);
+            msg->setSequenceN(sequence_number);
+            msg->setIv(iv);
+            msg->getPayload()->setAuthTag(auth_tag);
+            msg->setSender(sender);
             break;
         default:
             break;
@@ -1390,6 +1425,10 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
     BIO* bio = BIO_new(BIO_s_mem());
     OPENSSL_FAIL(bio,"allocating bio stream message to bytes failed",0)
     switch (message->getType()) {
+        case AUTH_KEY_EXCHANGE_RESPONSE:
+            not_used = BIO_write(bio,sn,sizeof(uint32_t));
+            BIO_FAIL(not_used,"message_to_bytest writing sn 0",0);
+            break;
         case REQUEST_TO_TALK:
         case REQUEST_OK:
         case REQUEST_KO:
@@ -1489,13 +1528,22 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
             not_used = BIO_write(bio,message->getIv(),IV_LEN);
             BIO_FAIL(not_used,"message_to_bytes writing bio stream failed 37",0)
             break;
+        case CLIENT_DONE:
+            not_used = BIO_write(bio, sn,sizeof(uint32_t));
+            BIO_FAIL(not_used,"message_to_bytes writing bio stream failed 36",0)
+            not_used = BIO_write(bio,message->getIv(),IV_LEN);
+            BIO_FAIL(not_used,"message_to_bytes writing bio stream failed 37",0)
+            not_used = BIO_write(bio,message->getSender().c_str(),message->getSender().length());
+            BIO_FAIL(not_used,"message_to_bytes writing bio stream failed 32",0)
+            break;
         default:
             break;
     }
+    delete [] sn;
     len = BIO_pending(bio);
     NEW(*bytes,new unsigned char[len],"message to bytes allocating buffer failed")
-    BIO_read(bio,*bytes,len);
+    not_used = BIO_read(bio,*bytes,len);
     BIO_free(bio);
-    delete [] sn;
+    BIO_FAIL(not_used,"message to bytes reading message byte failed",0)
     return len;
 }
