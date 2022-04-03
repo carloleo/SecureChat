@@ -123,7 +123,6 @@ Session* configure_server(void){
             User* user;
             NEW(user,new User(),"user")
             user->setUserName(username);
-            cout << username << endl;
             EVP_PKEY* pub_key = read_public_key(username);
             user->setPublicKey(pub_key);
             session->add_user(user);

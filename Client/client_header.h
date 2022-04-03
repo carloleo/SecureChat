@@ -293,6 +293,10 @@ void listener(int socket,pthread_t main_tid){
                         server_in_sn += 1;
                         peer_username = message->getSender();
                     }
+                    else{
+                        cerr << "Fatal authentication error" << endl;
+                        exit(EXIT_FAILURE);
+                    }
                     break;
                 case PEER_PUB_KEY:
                     result = verify_server_authenticity(message);
@@ -518,46 +522,48 @@ void listener(int socket,pthread_t main_tid){
                     break;
                 case ERROR:
                     result = verify_server_authenticity(message);
-                    if(result){
-                        server_in_sn += 1;
-                        switch (message -> getErrCode()){
-                            case FORWARD_ACCEPT_FAIL:
-                                cerr << "Server unable to accept the request to talk. The request has been nullified" << endl;
-                                m_status.lock();
-                                is_busy = false;
-                                m_status.unlock();
-                                break;
-                            case FORWARD_REQUEST_FAIL:
-                                cerr << "Server unable to forward your request to talk." << endl;
-                                m_status.lock();
-                                is_busy = false;
-                                is_requester = false;
-                                m_status.unlock();
-                                break;
-                            case PEER_DISCONNECTED:
-                                cerr << "Peer disconnected. Chat terminated" << endl;
-                                m_lock.lock();
-                                //in case disconnected before sending a response S
-                                if(!messages_queue.empty())
-                                    messages_queue.pop_back();
-                                m_lock.unlock();
-                                m_status.lock();
-                                is_busy = false;
-                                EVP_PKEY_free(peer_pub_key);
-                                peer_pub_key = nullptr;
-                                if(peer_session_key != nullptr) {
-                                    destroy_secret(peer_session_key, KEY_LENGTH);
-                                    peer_session_key = nullptr;
-                                }
-                                peer_out_sn = 0;
-                                peer_in_sn = 0;
-                                is_requester = false;
-                                m_status.unlock();
-                                break;
-                            default:
-                                break;
-                            delete message;
-                        }
+                    if(!result){
+                        cerr << "Fata authentication error" << endl;
+                        exit(EXIT_FAILURE);
+                    }
+                    server_in_sn += 1;
+                    switch (message -> getErrCode()){
+                        case FORWARD_ACCEPT_FAIL:
+                            cerr << "Server unable to accept the request to talk. The request has been nullified" << endl;
+                            m_status.lock();
+                            is_busy = false;
+                            m_status.unlock();
+                            break;
+                        case FORWARD_REQUEST_FAIL:
+                            cerr << "Server unable to forward your request to talk." << endl;
+                            m_status.lock();
+                            is_busy = false;
+                            is_requester = false;
+                            m_status.unlock();
+                            break;
+                        case PEER_DISCONNECTED:
+                            cerr << "Peer disconnected. Chat terminated" << endl;
+                            m_lock.lock();
+                            //in case disconnected before sending a response S
+                            if(!messages_queue.empty())
+                                messages_queue.pop_back();
+                            m_lock.unlock();
+                            m_status.lock();
+                            is_busy = false;
+                            EVP_PKEY_free(peer_pub_key);
+                            peer_pub_key = nullptr;
+                            if(peer_session_key != nullptr) {
+                                destroy_secret(peer_session_key, KEY_LENGTH);
+                                peer_session_key = nullptr;
+                            }
+                            peer_out_sn = 0;
+                            peer_in_sn = 0;
+                            is_requester = false;
+                            m_status.unlock();
+                            break;
+                        default:
+                            break;
+                        delete message;
                     }
                     break;
                 default:

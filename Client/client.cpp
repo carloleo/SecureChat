@@ -285,6 +285,10 @@ int main(){
                     cin.clear();
                     break;
                 }
+                if(text.length() > MAX_CHARS){
+                    cerr << "Message too long" << endl;
+                    break;
+                }
                 not_used = send_peer_message(server_socket,text, DATA,username,
                                   is_requester ? recipient : peer_username);
                 if(not_used){
