@@ -1,5 +1,5 @@
 cmake-build-debug/*
 .idea/*
 CMakeFiles/*
-Server/Docs/*
-Client/Docs/*
+Server/Docs/*.pem
+Client/Docs/*.pem

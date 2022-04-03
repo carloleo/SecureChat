@@ -12,7 +12,7 @@ if( OPENSSL_FOUND )
 else()
     exit(1)
 endif()
-
+#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "./bin")
 include_directories(${OPENSSL_INCLUDE_DIRS})
 
 # library directory
