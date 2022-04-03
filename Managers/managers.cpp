@@ -1428,6 +1428,8 @@ int Managers::CryptoManager::message_to_bytes(Message* message, unsigned char** 
         case AUTH_KEY_EXCHANGE_RESPONSE:
             not_used = BIO_write(bio,sn,sizeof(uint32_t));
             BIO_FAIL(not_used,"message_to_bytest writing sn 0",0);
+            not_used = BIO_write(bio, message->getIv(),IV_LEN);
+            BIO_FAIL(not_used,"message_to_bytes wrinting IV failed 0",0);
             break;
         case REQUEST_TO_TALK:
         case REQUEST_OK:
