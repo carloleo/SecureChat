@@ -10,7 +10,7 @@
 #include <thread>
 #include <list>
 #include "../Managers/managers.h"
-#define CERT_DIR (string )"../Client/Certs/"
+#define DOCS_DIR (string )"../Client/Docs/"
 #define CA_CERT (string) "CA.pem"
 #define CA_CRL "CA_crl.pem"
 using namespace std;
@@ -66,9 +66,9 @@ string online_users;
 
 
 int  verify_cert(X509* cert){
-    X509* ca_cert = CryptoManager::open_certificate(CERT_DIR + CA_CERT);
+    X509* ca_cert = CryptoManager::open_certificate(DOCS_DIR + CA_CERT);
     ISNOT(ca_cert,"opening CA certificate failed")
-    X509_CRL* ca_crl = CryptoManager::open_crl(CERT_DIR + CA_CRL);
+    X509_CRL* ca_crl = CryptoManager::open_crl(DOCS_DIR + CA_CRL);
     ISNOT(ca_crl,"opening CA_crl failed")
     int result = CryptoManager::verify_cert(ca_cert,ca_crl,cert);
     X509_free(ca_cert);

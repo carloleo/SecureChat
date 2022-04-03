@@ -39,7 +39,7 @@ int main(){
     //IDE does not allow to open the prompt
     //reading client pvt key
     FILE* file;
-    string filename = (string)  CERT_DIR + username + "_key.pem" ;
+    string filename = (string)  DOCS_DIR + username + "_key.pem" ;
     file = fopen(filename.c_str(),"r");
     ISNOT(file,"opening client private key fail failed")
     pvt_client_key = PEM_read_PrivateKey(file,NULL,NULL,NULL);
