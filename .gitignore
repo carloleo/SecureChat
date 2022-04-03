@@ -2,4 +2,4 @@ cmake-build-debug/*
 .idea/*
 CMakeFiles/*
 Server/Docs/*
-Client/Certs/*
+Client/Docs/*
