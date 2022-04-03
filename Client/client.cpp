@@ -285,6 +285,11 @@ int main(){
                     cin.clear();
                     break;
                 }
+                trim(text);
+                if(text.length() == 0){
+                    cerr << "Cannot sent an empty message" << endl;
+                    break;
+                }
                 if(text.length() > MAX_CHARS){
                     cerr << "Message too long" << endl;
                     break;
