@@ -12,7 +12,6 @@
 #include <openssl/x509.h>
 #include <openssl/rand.h>
 #include <openssl/rsa.h>
-//#include <openssl/engine.h>
 #include <iostream>
 #include <string>
 #include <limits>
@@ -25,7 +24,8 @@
        }
 #define IF_IO_ERROR(result,error_value) \
         if(result <= 0){                 \
-            perror("I/O ERROR");                                \
+            if(errno != 0)              \
+                perror("I/O ERROR");                         \
             return error_value; \
         }
 #define BIO_FAIL(result, message, error_value) \
@@ -119,9 +119,10 @@ int Managers::SocketManager::send_public_key(int socket, EVP_PKEY *pubkey) {
 }
 int Managers::SocketManager::send_data(int socket,unsigned char* data, uint32_t len){
     int result;
+    //send size
     result = SocketManager::write_n(socket, sizeof(uint32_t),(void*)&len);
     IF_IO_ERROR(result, 0)
-    //read signature
+    //send data
     result = SocketManager::write_n(socket,len,
                                    (void*) data);
     return result;
@@ -129,9 +130,11 @@ int Managers::SocketManager::send_data(int socket,unsigned char* data, uint32_t 
 
 int Managers::SocketManager::read_data(int socket,unsigned char** data, uint32_t *len){
     int result;
+    //read size
     result = SocketManager::read_n(socket, sizeof(uint32_t),(void*)len);
     IF_IO_ERROR(result, 0)
     NEW(*data,new unsigned char[*len],"data")
+    //read data
     result = SocketManager::read_n(socket,*len,
                                    (void*) *data);
     return result;
@@ -215,7 +218,7 @@ int Managers::SocketManager::send_authenticated_message(int socket, Message *mes
     else
         message->getPayload()->setAuthTag(tag);
     not_used = SocketManager::send_message(socket, message);
-    IF_MANAGER_FAILED(aad_size,"send_authenticated_message sending message failed",0)
+    IF_MANAGER_FAILED(not_used,"send_authenticated_message sending message failed",0)
     return 1;
 
 }
@@ -318,15 +321,20 @@ int Managers::SocketManager::send_message(int socket, Message *msg) {
         case REQUEST_OK:
         case REQUEST_KO:
             sequence_number = msg->getSequenceN();
+            //send sequence number
             result = SocketManager::write_n(socket,sizeof(uint32_t),(void*) &sequence_number);
             IF_IO_ERROR(result,0)
             iv = msg->getIv();
+            //send iv
             result = SocketManager::send_data(socket,iv,IV_LEN);
             IF_IO_ERROR(result,0);
+            //send tag
             result = SocketManager::send_data(socket,msg->getPayload()->getAuthTag(),TAG_LEN);
             IF_IO_ERROR(result,0)
+            //send sender
             result = SocketManager::write_string(socket,msg->getSender());
             IF_IO_ERROR(result,0)
+            //send recipient
             result = SocketManager::write_string(socket,msg->getRecipient());
             IF_IO_ERROR(result,0)
             break;
@@ -554,16 +562,12 @@ Message* Managers::SocketManager::read_message(int socket){
             //read username
             result = SocketManager::read_string(socket,username);
             IF_IO_ERROR(result, nullptr)
-            //cout << username << endl;
-            //read nonce
             result = SocketManager::read_n(socket,sizeof(uint32_t),(void*)&nonce);
-            //cout << nonce << endl;
-            if(result){
-                NEW(msg,new Message(),"msg read_message")
-                msg->setType(AUTH_REQUEST);
-                msg->setSender(username);
-                msg->getPayload()->setNonce(nonce);
-            }
+            IF_IO_ERROR(result, nullptr)
+            NEW(msg,new Message(),"msg read_message")
+            msg->setType(AUTH_REQUEST);
+            msg->setSender(username);
+            msg->getPayload()->setNonce(nonce);
             break;
         case AUTH_RESPONSE:
             //read signature
@@ -633,7 +637,7 @@ Message* Managers::SocketManager::read_message(int socket){
             IF_IO_ERROR(result, nullptr)
             result = SocketManager::read_string(socket,recipient);
             IF_IO_ERROR(result, nullptr)
-            msg = new Message();
+            NEW(msg,new Message(),"read_message allocating message failed");
             msg->setType(type == REQUEST_TO_TALK ? REQUEST_TO_TALK :
                                                     type == REQUEST_OK ? REQUEST_OK : REQUEST_KO);
             msg->setSender(sender);
@@ -651,7 +655,7 @@ Message* Managers::SocketManager::read_message(int socket){
             IF_IO_ERROR(result, nullptr)
             result = SocketManager::read_data(socket,&auth_tag,&size);
             IF_IO_ERROR(result, nullptr)
-            msg = new Message();
+            NEW(msg,new Message(),"read_message allocating message failed")
             msg->setType(USERS_LIST);
             msg->setSender(sender);
             msg->setSequenceN(sequence_number);
@@ -671,7 +675,7 @@ Message* Managers::SocketManager::read_message(int socket){
             //read encrypted online users list
             result = SocketManager::read_data(socket,&ciphertext,&ciphertext_len);
             IF_IO_ERROR(result, nullptr);
-            msg = new Message();
+            NEW(msg,new Message(),"read_message allocating message failed")
             msg->setType(USERS_LIST_RESPONSE);
             msg->setSequenceN(sequence_number);
             msg->setIv(iv);
@@ -984,12 +988,12 @@ int Managers::CryptoManager::gcm_decrypt(unsigned char *ciphertext, int cipherte
         return 0;
     }
 }
-//REMINDER: IV as AAD
+
 void Managers::CryptoManager::manage_error(string message){
     std::cerr << message << std::endl;
     ERR_print_errors_fp(stderr);
 }
-//return
+
 unsigned char* Managers::CryptoManager::sign(unsigned char *plaintext, uint64_t plain_size, EVP_PKEY *sign_key, uint32_t* sgnt_size) {
     int not_used;
     unsigned char * sgnt_buff; //signature
@@ -1008,7 +1012,6 @@ unsigned char* Managers::CryptoManager::sign(unsigned char *plaintext, uint64_t 
 
     // delete the digest and the private key from memory:
     EVP_MD_CTX_free(md_ctx);
-    //EVP_PKEY_free(prvkey);
     return  sgnt_buff;
 }
 
@@ -1184,7 +1187,6 @@ int Managers::CryptoManager::generate_ephemeral_rsa(EVP_PKEY** pub_key, EVP_PKEY
     BIO_free_all(bio_buff_pvt_key);
     delete [] pub_key_bytes;
     delete [] pvt_key_bytes;
-    //REMINDER: free both input keys
     return 1;
 }
 
@@ -1262,24 +1264,7 @@ int Managers::CryptoManager::rsa_encrypt(unsigned char** ciphertext, size_t* cip
     EVP_PKEY_CTX *ctx;
     ENGINE* eng;
     int not_used;
-    /*
-    eng = ENGINE_new();
-    //eng = ENGINE_new();
-    OPENSSL_FAIL(eng,"retrieving rsa engine failed",0)
-    not_used = ENGINE_set_default_ciphers(eng);
-    OPENSSL_FAIL(not_used,"ini",0);
-    ctx = EVP_PKEY_CTX_new(pub_key,eng);
-    OPENSSL_FAIL(ctx,"allocating evp ctx failed",0)
-    not_used = EVP_PKEY_encrypt_init(ctx);
-    OPENSSL_FAIL(not_used,"initializing  rsa ctx failed",0);
-    // Determine maximum buffer length
-    if(EVP_PKEY_encrypt(ctx, NULL, ciphertext_len, plaintext, plain_size) <= 0){
-        CryptoManager::manage_error("rsa determining max buffer size failed");
-        return 0;
-    }
-    ciphertext =  new unsigned char[*ciphertext_len];
-    ISNOT(ciphertext,"rsa_encrypt allocating ciphertext failed")
-     */
+
     RSA* r = EVP_PKEY_get0_RSA(pub_key);
     OPENSSL_FAIL(r,"EVP_PKEY_get0_RSA",0);
     NEW(*ciphertext,new unsigned char[RSA_size(r)],"ciphertext")
@@ -1291,16 +1276,6 @@ int Managers::CryptoManager::rsa_encrypt(unsigned char** ciphertext, size_t* cip
     OPENSSL_FAIL(not_used,"rsa encryption failed",0)
     *ciphertext_len = not_used;
     return 1;
-
-    /*
-    //encrypt and take the actual size of ciphertext
-    if(EVP_PKEY_encrypt(ctx, ciphertext, ciphertext_len, plaintext, plain_size) <= 0){
-        CryptoManager::manage_error("rsa encryption failed");
-        return 0;
-    }
-    ENGINE_free(eng);
-    EVP_PKEY_CTX_free(ctx);
-    return 1;*/
 }
 //do not allocate plaintext buffer
 int Managers::CryptoManager::rsa_decrypt(unsigned char *ciphertext, size_t ciphertext_len, unsigned char **plaintext,
@@ -1308,31 +1283,6 @@ int Managers::CryptoManager::rsa_decrypt(unsigned char *ciphertext, size_t ciphe
     EVP_PKEY_CTX *ctx;
     ENGINE* eng;
     int not_used;
-    /*
-    eng = ENGINE_new();
-    OPENSSL_FAIL(eng,"retrieving rsa engine failed",0)
-    ENGINE_set_RSA(eng, RSA_get_default_method());
-    ctx = EVP_PKEY_CTX_new(pvt_key,eng);
-    OPENSSL_FAIL(ctx,"allocating evp ctx failed",0)
-    not_used = EVP_PKEY_decrypt_init(ctx);
-    OPENSSL_FAIL(not_used,"initializing  rsa ctx failed",0);
-
-    // Determine maximum buffer length
-    if(EVP_PKEY_decrypt(ctx, NULL, plain_size, ciphertext, ciphertext_len) <= 0){
-        CryptoManager::manage_error("rsa determining max buffer size failed");
-        return 0;
-    }
-
-    plaintext =  new unsigned char[*plain_size];
-    ISNOT(plaintext,"rsa_encrypt allocating ciphertext failed")
-    //encrypt and take the actual size of ciphertext
-    if(EVP_PKEY_decrypt(ctx, plaintext, plain_size, ciphertext, ciphertext_len) <= 0){
-        CryptoManager::manage_error("rsa decryption failed");
-        return 0;
-    }
-    ENGINE_free(eng);
-    EVP_PKEY_CTX_free(ctx);
-     */
     RSA* r = EVP_PKEY_get0_RSA(pvt_key);
     OPENSSL_FAIL(r,"EVP_PKEY_get0_RSA",0);
     NEW(*plaintext,new unsigned char[RSA_size(r)],"plaintext")

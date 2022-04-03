@@ -67,7 +67,6 @@ int main() {
     fd_num = master_socket;
     while (true){
         read_set = client_set;
-        //cout << "Sleep on select" <<endl;
         not_used = select(fd_num + 1,&read_set, nullptr, nullptr, nullptr);
         if(not_used < 0 ){
             if(quit)
@@ -92,7 +91,7 @@ int main() {
                     }
                     else{
                         int r = manage_message(fd,message);
-                        if(!r) {
+                        if(!r) { //error in handling the client request
                             disconnect_client(fd, &client_set, &fd_num);
                         }
                     }
@@ -171,8 +170,6 @@ EVP_PKEY* read_public_key(string username){
     file = fopen(filename.c_str(),"r");
     ISNOT(file,"opening users public key failed")
     public_key = PEM_read_PUBKEY(file,NULL,NULL,NULL);
-    //cout << "size: " << EVP_PKEY_size(public_key) << endl;
-    //BIO_dump_fp(stdout,(const char*) public_key, EVP_PKEY_size(public_key));
     fclose(file);
     return public_key;
 }
@@ -262,8 +259,6 @@ int manage_message(int socket, Message* message){
             memmove(to_verify, encrypted_master_secret, encrypted_ms_size);
             //move on pointer to put the rest
             memmove(to_verify + encrypted_ms_size, eph_pub_key_bytes, eph_pub_key_bytes_size);
-            //bytes have been copied free memory
-            //free(encrypted_master_secret);
             delete[] eph_pub_key_bytes;
             //verify client signature on ciphertext
             signature = message->getPayload()->getSignature();
@@ -368,8 +363,6 @@ int manage_message(int socket, Message* message){
             if (result) {
                 //increment sequence number
                 recipient->increment_server_sn();
-                // delete reply;
-                //NEW(reply,new Message(),"REQUEST_OK allocating message failed")
                 iv = CryptoManager::generate_iv();
                 IF_MANAGER_FAILED(iv, "REQUEST_OK generating iv failed", 0)
                 //owner public key
@@ -385,7 +378,7 @@ int manage_message(int socket, Message* message){
                     //disconnect target
                 else disconnect_client(sender->getSocket(), &client_set, &fd_num);
 
-            } //accepting of request to talk failed
+            } //accepting request to talk failed
             else {
                 //disconnect requester
                 disconnect_client(recipient->getSocket(), &client_set, &fd_num);
@@ -442,7 +435,6 @@ int manage_message(int socket, Message* message){
                 return result;
             sender = session->get_user(username_sender);
             recipient = session->get_user(message->getRecipient());
-            result = false;
             if (recipient->isOnline()) {
                 delete[] message->getIv();
                 iv = CryptoManager::generate_iv();
@@ -458,11 +450,16 @@ int manage_message(int socket, Message* message){
 
                 result = SocketManager::send_authenticated_message(recipient->getSocket(), message,
                                                                    recipient->getSessionKey(), peer_authentication);
-                recipient->increment_server_sn();
-                //peer ephmeral key
+
+                if(!result) //error in forwarding message disconnect recipient
+                    disconnect_client(recipient->getSocket(),&client_set,&fd_num);
+                else
+                    recipient->increment_server_sn();
+                //peer ephemeral  key
                 if (message->getType() == AUTH_PEER_RESPONSE)
                     EVP_PKEY_free(message->getPayload()->getPubKey());
             } //error message is sent and chat is closed by session->disconnectClient()
+            result = true;
             break;
         case PEER_QUIT:
             //check authenticity
@@ -488,8 +485,7 @@ int manage_message(int socket, Message* message){
                     recipient->setIsBusy(false);
                     recipient->increment_server_sn();
                 }
-                    //in case of issues during sending notify disconnect the recipient
-                else
+                else //in case of issues during sending notify disconnect the recipient
                     disconnect_client(recipient->getSocket(), &client_set, &fd_num);
                 sender->setIsBusy(false);
                 session->close_chat(chat->getRequesterPeer(), chat->getTargetPeer());

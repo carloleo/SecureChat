@@ -226,7 +226,7 @@ int decrypt_message(Message* data, unsigned char* key, string &message,bool from
     return pt_len > 0;
 
 }
-//TODO: peer to peer authentication and managing messages
+
 void listener(int socket,pthread_t main_tid){
     Message* message;
     int result = 0;
@@ -256,12 +256,11 @@ void listener(int socket,pthread_t main_tid){
         message = SocketManager::read_message(socket);
         string s;
         string tmp;
-        if(!message){ //TODO termination protocol
+        if(!message){
             cerr << "Server disconnected" << endl;
             exit(EXIT_SUCCESS);
         }
         try{
-            cerr << "SN " << message->getSequenceN() << server_in_sn << endl;
             if(message->getSequenceN() != server_in_sn){
                 cerr << "Fatal: received a replayed message" << endl;
                 exit(EXIT_FAILURE);

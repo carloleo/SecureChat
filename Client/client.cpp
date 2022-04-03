@@ -22,7 +22,6 @@ int main(){
     server_address.sin_addr.s_addr = inet_addr("127.0.0.1");  //server IP
     server_socket = socket(AF_INET,SOCK_STREAM,0);
     ISLESSTHANZERO(server_socket,"Opening socket failed")
-    cout << "Socket opened" << endl;
     //connect to server
     not_used = connect(server_socket,(struct sockaddr*) &server_address,sizeof(server_address));
     ISLESSTHANZERO(not_used,"Connect failed")
@@ -37,16 +36,13 @@ int main(){
     getline(cin,username);
     ISNOT(cin,"Ooops! something went wrong")
     trim(username);
-    //IDE does not allow to open promt
-    string pwd;
-    cout << "pwd" << endl;
-    getline(cin,pwd);
+    //IDE does not allow to open the prompt
     //reading client pvt key
     FILE* file;
     string filename = (string)  CERT_DIR + username + "_key.pem" ;
     file = fopen(filename.c_str(),"r");
     ISNOT(file,"opening client private key fail failed")
-    pvt_client_key = PEM_read_PrivateKey(file,NULL,NULL,(void*) pwd.c_str());
+    pvt_client_key = PEM_read_PrivateKey(file,NULL,NULL,NULL);
     fclose(file);
     ISNOT(pvt_client_key,"reading client pvt key failed")
     not_used = authenticate_to_server(server_socket,username,online_users);
@@ -149,7 +145,7 @@ int main(){
                 }
                 m_status.unlock();
                 message.setType(PEER_QUIT);
-                //usernames of re
+                //usernames
                 message.setSender(username);
                 iv = CryptoManager::generate_iv();
                 message.setIv(iv);
@@ -174,7 +170,7 @@ int main(){
             case LOGOUT:
                 m_status.lock();
                 if(peer_session_key != nullptr){
-                    cout << "type quit to leave the chat beafor log out" << endl;
+                    cout << "type quit to leave the chat before logout" << endl;
                     m_status.unlock();
                     break;
                 }
@@ -204,7 +200,6 @@ int main(){
                 else
                     cerr << "error in sending the request. Try later." << endl;
                 break;
-                //TODO make a function to send authenticate request
             case ACCEPT:
                 m_lock.lock();
                 if(!messages_queue.empty())
@@ -272,8 +267,6 @@ int main(){
                     m_status.unlock();
                     delete request;
                     request = nullptr;
-                    cout << "Request to talk from has been rejected" << endl;
-                    cout << endl;
                 }
                 break;
             case SEND:
