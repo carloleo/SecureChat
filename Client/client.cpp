@@ -111,7 +111,7 @@ int main(){
                 recipient_offline = !is_online(recipient);
                 if(recipient_offline) {
                     cerr << "username is not online" << endl;
-                    cout << "type 'list' to updated the list" << endl;
+                    cout << "type 'list' to update the list" << endl;
                 }
                 else{
                     message.setType(REQUEST_TO_TALK);
