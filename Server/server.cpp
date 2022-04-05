@@ -204,6 +204,7 @@ int manage_message(int socket, Message* message){
     bool peer_authentication= false;
     Chat* chat;
     string username_recipient;
+    bool yourself = false;
     //NEW(reply,new Message(),"reply")
     switch (message->getType()) {
         case AUTH_REQUEST:
@@ -302,8 +303,9 @@ int manage_message(int socket, Message* message){
                 return result;
             sender = session->get_user(username_sender);
             recipient = session->get_user(message->getRecipient());
+            yourself = username_sender.compare(message->getRecipient()) == 0;
             result = false;
-            if (recipient->isOnline() and !recipient->isBusy()) {
+            if (recipient->isOnline() and !recipient->isBusy() and !yourself) {
                 iv = CryptoManager::generate_iv();
                 //free because they will be replaced
                 delete[] message->getIv();

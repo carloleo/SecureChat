@@ -102,12 +102,7 @@ int main(){
                     break;
                 }
                 trim(recipient);
-                //yourself
-                if(username.compare(recipient) == 0){
-                    cerr << "cannot open a conversation with yourself" << endl;
-                    break;
-                }
-                //check if recipient is online
+                //check if recipient is online the check is also done on server-side
                 recipient_offline = !is_online(recipient);
                 if(recipient_offline) {
                     cerr << "username is not online" << endl;
