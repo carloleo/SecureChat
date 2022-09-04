@@ -5,6 +5,10 @@
 
 #include "User.h"
 #include "../Common/utility.h"
+/*
+ * User ADT implementation
+ * getters and setters
+ */
 const std::string &User::getUserName() const {
     return user_name;
 }
