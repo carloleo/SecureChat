@@ -10,7 +10,9 @@
 #include <cstring>
 #include <ostream>
 
-
+/*
+ * ADT representing a message
+ */
 class Message {
 private:
     //header
@@ -20,13 +22,13 @@ private:
     uint32_t cert_len; // certificate length
     uint32_t c_txt_len; //ciphertext length
     uint32_t sequence_n; //sequence number
-    uint32_t peer_sn; //sequence number between peer
+    uint32_t peer_sn; //sequence number between peers
     unsigned char* iv; //initialization vector
-    unsigned char* peer_iv;//initialization vector between peer
+    unsigned char* peer_iv;//initialization vector between peers
     uint32_t signature_len;
     std::string sender;
     std::string recipient;
-    unsigned char* server_auth_tag; //
+    unsigned char* server_auth_tag; // authentication tag between server and client when two users chat
     //payload
     Payload* payload;
 public:

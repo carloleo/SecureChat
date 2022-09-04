@@ -3,6 +3,10 @@
 //
 
 #include "Message.h"
+/*
+ * Message ADT implementation
+ * getters and setters
+ */
 
 MESSAGE_TYPE Message::getType() const {
     return type;
@@ -23,6 +27,7 @@ Payload *Message::getPayload() const {
 void Message::setType(MESSAGE_TYPE type) {
     Message::type = type;
 }
+
 void Message::setSender(const std::string &sender) {
     Message::sender = sender;
 }
@@ -36,13 +41,13 @@ void Message::setPayload(Payload *payload) {
 }
 
 Message::~Message() {
-    if(iv)
-        delete [] iv;
-    if(peer_iv)
-        delete [] peer_iv;
-    if(server_auth_tag)
-        delete [] server_auth_tag;
-    if(payload)
+    if (iv)
+        delete[] iv;
+    if (peer_iv)
+        delete[] peer_iv;
+    if (server_auth_tag)
+        delete[] server_auth_tag;
+    if (payload)
         delete payload;
 }
 
@@ -50,7 +55,7 @@ Message::Message() {
     iv = nullptr;
     peer_iv = nullptr;
     server_auth_tag = nullptr;
-    NEW(payload, new Payload(),"payload")
+    NEW(payload, new Payload(), "payload")
 }
 
 uint32_t Message::getPkLen() const {

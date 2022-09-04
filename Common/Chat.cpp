@@ -4,6 +4,9 @@
 
 #include "Chat.h"
 
+/*
+ * Chat ADT implementation
+ */
 void Chat::setRequesterPeer(const std::string &requesterPeer) {
     requester_peer = requesterPeer;
 }

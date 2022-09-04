@@ -7,12 +7,12 @@
 
 
 #include <string>
-
+/*
+ * ADT representing a chat between two users
+ */
 class Chat {
-    std::string requester_peer;
-    std::string target_peer;
-    bool pending;
-    bool ongoing;
+    std::string requester_peer; // who opened the chat
+    std::string target_peer;  // whom to talk
 public:
     void setRequesterPeer(const std::string &requesterPeer);
 

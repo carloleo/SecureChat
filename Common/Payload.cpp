@@ -4,6 +4,10 @@
 
 #include "Payload.h"
 
+/*
+ * Payload ADT implementation
+ * getters and setters
+ */
 unsigned char *Payload::getSignature() const {
     return signature;
 }
@@ -53,13 +57,12 @@ void Payload::setCert(X509 *cert) {
 }
 
 Payload::~Payload() {
-    if(signature)
-        delete [] signature;
-    if(ciphertext)
-        delete [] ciphertext;
-    if(auth_tag)
-        delete [] auth_tag;
-    //EVP_PKEY_free(pub_key);
+    if (signature)
+        delete[] signature;
+    if (ciphertext)
+        delete[] ciphertext;
+    if (auth_tag)
+        delete[] auth_tag;
 
 }
 
