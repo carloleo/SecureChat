@@ -20,38 +20,75 @@ using namespace Managers;
 void usage();
 
 //functions
+
+/*
+ * @brief: clean up data structures
+ */
 void clean_up();
 
+/*
+ * @brief: perform handshake
+ */
 int authenticate_to_server(int server_socket, string username, string &online_users);
 
+/*
+ * @brief: check server authentication tag
+ */
 int verify_server_authenticity(Message *message, bool peer_protection = false);
 
+/*
+ * @brief: verify cert authenticity
+ */
 int verify_cert(X509 *);
 
+/*
+ * @brief: prepare third handshake message
+ */
 int prepare_third_message(EVP_PKEY *, Message *, bool for_peer = false);
 
+/*
+ * @brief: read and decrypt an encrypted message
+ */
 int read_encrypted_message(int socket, uint32_t sequence_number, string &message, unsigned char *key);
 
 inline std::string trim(std::string &str);
 
+/*
+ * @return: true if username is online
+ */
 bool is_online(string username);
 
+/*
+ * @brief: update online users list
+ */
 void update_users_list(string text_list);
+
+/*
+ * @brief: read incoming messages
+ */
+void listener(int socket, pthread_t main_tid);
+
+/*
+ * @brief: decrypt message data
+ */
+int decrypt_message(Message *data, unsigned char *key, string &message, bool from_user = false);
+
+/*
+ * @brief: prepare Additional Authenticated Data w.r.t. message type for another user
+ */
+int prepare_peer_aad(Message *message, unsigned char **aad);
+
+/*
+ * @brief: prepare message for another user and send it through server
+ *
+ */
+int send_peer_message(int socket, string text, MESSAGE_TYPE messageType, string sender, string recipient);
 
 //cli interface
 enum COMMAND {
     TALK, QUIT, LOGOUT, LIST, ACCEPT, REJECT, SEND
 };
 static std::map<std::string, COMMAND> commands;
-
-void listener(int socket, pthread_t main_tid);
-
-int decrypt_message(Message *data, unsigned char *key, string &message, bool from_user = false);
-
-int prepare_peer_aad(Message *message, unsigned char **aad);
-
-int send_peer_message(int socket, string text, MESSAGE_TYPE messageType, string sender, string recipient);
-
 //messages queue
 std::mutex m_lock;
 //users online
@@ -75,9 +112,9 @@ uint32_t peer_out_sn = 0;
 string peer_username;
 bool is_busy = false;
 bool is_requester = false;
-//receive it to server, after thread instantiation it is only managed by the listener
+//receive it from the server, after thread instantiation it is only managed by the listener
 uint32_t server_in_sn = 0;
-//send it to server
+//send it to the server
 uint32_t server_out_sn = 0;
 
 string username;
